@@ -1,0 +1,8 @@
+[project]
+name = "sfparticles"
+version = "0.0"
+dependencies = [
+    "numpy",
+    "numba",
+]
+requires-python = ">=3.9"
