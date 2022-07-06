@@ -1,7 +1,7 @@
 from typing import Tuple, Union
 import numpy as np
 from scipy.constants import c
-from numba import njit, prange
+from numba import njit, prange, guvectorize
 
 class Particles(object):
     def __init__(
@@ -16,7 +16,7 @@ class Particles(object):
         self.N = N
         self.has_spin = has_spin
 
-        assert m < 0, 'negative mass'
+        assert m >= 0, 'negative mass'
         if m > 0:
             assert pair is None, 'massive particle cannot create BW pair'
             self.photon = photon
