@@ -3,6 +3,8 @@ from sfparticles import Particles
 
 import numpy as np
 from scipy.constants import pi, m_e, e, c
+from numba import njit, prange
+from sfparticles.fields import simple_laser_pulse, static_field
 
 from sfparticles.simulation import simulate
 
@@ -29,30 +31,18 @@ def init(N):
     uz = gen.rand(N) * 100
     return (x, y, z, ux, uy, uz)
 
+laser1 = simple_laser_pulse(a0, w0, ctau)
+laser2 = simple_laser_pulse(a0, w0, ctau, pol_angle=pi/2, cep=pi/2)
 
-def laser(x, y, z, t):
-    E0 = a0 / a0_norm
+laser = laser1 + laser2
 
-    r2 = y**2 + z**2
-    phi = k0*x - omega0*t
-
-    Ex = 0.0
-    Ey = E0 * np.sin(phi) * np.exp(-r2/w0**2) * np.exp(-phi**2 / (k0*ctau)**2)
-    Ez = 0.0
-    
-    Bx = 0.0
-    By = 0.0
-    Bz = Ey / c
-    return (Ex, Ey, Ez, Bx, By, Bz)
+By = static_field(By=1E6)
 
 N = int(10000)
-step = 1000
+step = 10000
 dt = 0.01*fs
 
 photons = Particles('photon', 0, 0, 0)
 electrons = Particles('electron', -1, 1, N, init(N), photon=photons)
 
-tic = perf_counter_ns()
-simulate(electrons, step=step, dt=dt, field_function=laser)
-toc = perf_counter_ns()
-print(f'{(toc - tic)/N/step:.2f} ns/step/particle')
+simulate(electrons, step=step, dt=dt, field=By)

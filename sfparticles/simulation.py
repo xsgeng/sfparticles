@@ -1,20 +1,26 @@
+from time import perf_counter_ns
 from typing import Callable, List
 
 from .fields import Fields
 from .particles import Particles
+
+from numba import njit, prange
 
 
 def simulate(
     *all_particles : Particles,
     step: int,
     dt: float,
-    field_function : Callable = None,
+    field : Fields = None,
 ):
-    field = Fields(field_function)
+
     t = 0.0
+    tic = perf_counter_ns()
+
     for istep in range(step):
         for particles in all_particles:
-            field._eval_field(particles, t)
+            if field:
+                field._eval_field(particles, t)
 
             particles._push_position(0.5*dt)
             particles._push_momentum(dt)
@@ -28,3 +34,6 @@ def simulate(
             if particles.pair:
                 bw_pair = particles._create_pair(dt)
         t += dt*istep
+
+    toc = perf_counter_ns()
+    print(f'{(toc - tic)/all_particles[0].N/step:.2f} ns/step/particle')
