@@ -82,17 +82,15 @@ class Particles(object):
         self.By = np.zeros(N)
 
 
-    # def set_field(self, field_function, use_cuda=False):
-    #     self.fieldd_function = field_function
-    #     self.use_cuda = use_cuda
-
-
-    # def _eval_field(self):
-    #     pass
-
-
     def _push_momentum(self, dt):
-        pass
+        if self.m > 0:
+            boris(
+                self.ux, self.uy, self.uz,
+                self.Ex, self.Ey, self.Ez, 
+                self.Bx, self.By, self.Bz,
+                self.q, self.N, dt
+            )
+
 
     def _push_position(self, dt):
         push_position(
@@ -142,23 +140,83 @@ def push_position( x, y, z, ux, uy, uz, inv_gamma, N, dt ):
         z[ip] += cdt * inv_gamma[ip] * uz[ip]
 
 
-# @njit(parallel=True, cache=True)
-# def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, m, N, dt ) :
-#     """
-#     Advance the particles' momenta, using numba
-#     """
-#     # Set a few constants
-#     econst = q*dt/(m*c)
-#     bconst = 0.5*q*dt/m
+@njit(parallel=True, cache=True)
+def boris( ux, uy, uz, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
+    """
+    Advance the particles' momenta, using numba
+    """
+    efactor = q*dt/(2*m_e*c)
+    bfactor = q*dt/(2*m_e)
 
-#     # Loop over the particles (in parallel if threading is installed)
-#     for ip in prange(N) :
-#         ux[ip], uy[ip], uz[ip], inv_gamma[ip] = push_p_vay(
-#             ux[ip], uy[ip], uz[ip], inv_gamma[ip],
-#             Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], econst, bconst )
+    for ip in prange(N):
+        # E field
+        ux_minus = ux[ip] + efactor * Ex[ip]
+        uy_minus = uy[ip] + efactor * Ey[ip]
+        uz_minus = uz[ip] + efactor * Ez[ip]
+        # B field
+        inv_gamma_minus = 1 / np.sqrt(1 + ux_minus**2 + uy_minus**2 + uz_minus**2)
+        Tx = bfactor * Bx[ip] * inv_gamma_minus
+        Ty = bfactor * By[ip] * inv_gamma_minus
+        Tz = bfactor * Bz[ip] * inv_gamma_minus
+        
+        ux_prime = ux_minus + uy_minus * Tz - uz_minus * Ty
+        uy_prime = uy_minus + uz_minus * Tx - ux_minus * Tz
+        uz_prime = uz_minus + ux_minus * Ty - uy_minus * Tx
 
-#     return ux, uy, uz, inv_gamma
+        Tfactor = 2 / (1 + Tx**2 + Ty**2 + Tz**2)
+        Sx = Tfactor * Tx
+        Sy = Tfactor * Ty
+        Sz = Tfactor * Tz
 
+        ux_plus = ux_minus + uy_prime * Sz - uz_prime * Sy
+        uy_plus = uy_minus + uz_prime * Sx - ux_prime * Sz
+        uz_plus = uz_minus + ux_prime * Sy - uy_prime * Sx
+
+        ux[ip] = ux_plus + efactor * Ex[ip]
+        uy[ip] = uy_plus + efactor * Ey[ip]
+        uz[ip] = uz_plus + efactor * Ez[ip]
+    
+
+# TODO
+@njit(parallel=True, cache=True)
+def boris_tbmt( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
+    """
+    Advance the particles' momenta, using numba
+    """
+    efactor = q*dt/(2*m_e*c)
+    bfactor = q*dt/(2*m_e)
+
+    for ip in prange(N):
+        # E field
+        ux_minus = ux[ip] + efactor * Ex[ip]
+        uy_minus = uy[ip] + efactor * Ey[ip]
+        uz_minus = uz[ip] + efactor * Ez[ip]
+        # B field
+        inv_gamma_minus = 1 / np.sqrt(1 + ux_minus**2 + uy_minus**2 + uz_minus**2)
+        Tx = bfactor * Bx[ip] * inv_gamma_minus
+        Ty = bfactor * By[ip] * inv_gamma_minus
+        Tz = bfactor * Bz[ip] * inv_gamma_minus
+        
+        ux_prime = ux_minus + uy_minus * Tz - uz_minus * Ty
+        uy_prime = uy_minus + uz_minus * Tx - ux_minus * Tz
+        uz_prime = uz_minus + ux_minus * Ty - uy_minus * Tx
+
+        Tfactor = 2 / (1 + Tx**2 + Ty**2 + Tz**2)
+        Sx = Tfactor * Tx
+        Sy = Tfactor * Ty
+        Sz = Tfactor * Tz
+
+        ux_plus = ux_minus + uy_prime * Sz - uz_prime * Sy
+        uy_plus = uy_minus + uz_prime * Sx - ux_prime * Sz
+        uz_plus = uz_minus + ux_prime * Sy - uy_prime * Sx
+
+        ux[ip] = ux_plus + efactor * Ex[ip]
+        uy[ip] = uy_plus + efactor * Ey[ip]
+        uz[ip] = uz_plus + efactor * Ez[ip]
+
+        # TBMT
+        ...
+    
 
 @njit(parallel=True, cache=True)
 def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, gamma, chi_e, N):
