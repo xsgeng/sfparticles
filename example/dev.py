@@ -1,8 +1,10 @@
 from time import perf_counter
-from sfparticles.particles import Particles
+from sfparticles import Particles
 
 import numpy as np
 from scipy.constants import m_e, e
+
+from sfparticles.simulation import simulate
 
 gen = np.random.RandomState(0)
 def init(N):
@@ -14,13 +16,12 @@ def init(N):
     uz = gen.rand(N) * 100
     return (x, y, z, ux, uy, uz)
 
+N = int(1E5)
+photons = Particles('photon', 0, 0, 0)
+electrons = Particles('electron', -1, 1, N, init(N), photon=photons)
 
-electrons = Particles(-e, m_e, 1000000, init(1000000))
-
-
+print(electrons is electrons)
 tic = perf_counter()
-for i in range(1000):
-    electrons._push_position(1e-15)
+simulate(electrons, step=1000, dt=1E-15)
 toc = perf_counter()
 print(toc - tic, ' s')
-# photons = Particles(0, 0, 0)

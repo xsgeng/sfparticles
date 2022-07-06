@@ -1,28 +1,31 @@
 from typing import Tuple, Union
 import numpy as np
-from scipy.constants import c
+from scipy.constants import c, m_e, e, hbar
 from numba import njit, prange, guvectorize
+
+from sfparticles.qed import lcfa_photon_prob
 
 class Particles(object):
     def __init__(
-        self,
+        self, name : str,
         q: float, m: float, N: int,
         props : Tuple = None,
         has_spin = False,
         photon = None, pair = None,
     ) -> None:
-        self.q = q
-        self.m = m
-        self.N = N
+        self.name = name
+        self.q = q * e
+        self.m = m * m_e
+        self.N = int(N)
         self.has_spin = has_spin
 
         assert m >= 0, 'negative mass'
         if m > 0:
             assert pair is None, 'massive particle cannot create BW pair'
-            self.photon = photon
         if m == 0:
             assert photon is None, 'photon cannot radiate photon'
-            self.pair = pair
+        self.photon = photon
+        self.pair = pair
 
         if props is None:
             x = np.zeros(N)
@@ -68,6 +71,7 @@ class Particles(object):
         
         # quantum parameter
         self.chi = np.zeros(N)
+        self.optical_depth = np.zeros(N)
 
         # fields at particle positions
         self.Ez = np.zeros(N)
@@ -98,11 +102,28 @@ class Particles(object):
             self.N, dt
         )
 
+
+    def _calculate_chi(self):
+        if self.m > 0:
+            update_chi_e(
+                self.Ex, self.Ey, self.Ez, 
+                self.Bx, self.By, self.Bz, 
+                self.ux, self.uy, self.uz,
+                1/self.inv_gamma, self.chi, self.N
+            )
+        if self.m == 0:
+            pass
+
+
     def _radiate_photons(self, dt):
-        pass
+        lcfa_photon_prob(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
 
 
     def _create_pair(self, dt):
+        pass
+
+
+    def _append(self, props):
         pass
 
 
@@ -137,3 +158,16 @@ def push_position( x, y, z, ux, uy, uz, inv_gamma, N, dt ):
 #             Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], econst, bconst )
 
 #     return ux, uy, uz, inv_gamma
+
+
+@njit(parallel=True, cache=True)
+def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, gamma, chi_e, N):
+    factor = e*hbar / (m_e**2 * c**3)
+    for ip in prange(N):
+        chi_e[ip] = factor * np.sqrt(
+            (gamma[ip]*Ex[ip] + (uy[ip]*Bz[ip] - uz[ip]*By[ip]))**2 +
+            (gamma[ip]*Ey[ip] + (uz[ip]*Bx[ip] - ux[ip]*Bz[ip]))**2 +
+            (gamma[ip]*Ez[ip] + (ux[ip]*By[ip] - uy[ip]*Bx[ip]))**2 -
+            (ux[ip]*Ex[ip] + uy[ip]*Ey[ip] + uz[ip]*Ez[ip])**2
+        )
+        
