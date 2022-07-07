@@ -18,6 +18,7 @@ def simulate(
     tic = perf_counter_ns()
 
     for istep in range(step):
+        # push particles
         for particles in all_particles:
             if field:
                 field._eval_field(particles, t)
@@ -26,9 +27,9 @@ def simulate(
             particles._push_momentum(dt)
             particles._push_position(0.5*dt)
 
+        # QED
+        for particles in all_particles:
             particles._calculate_chi()
-
-            
             if particles.photon:
                 photons = particles._radiate_photons(dt)
             if particles.pair:

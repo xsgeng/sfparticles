@@ -71,7 +71,7 @@ class Particles(object):
         
         # quantum parameter
         self.chi = np.zeros(N)
-        self.optical_depth = np.zeros(N)
+        self.optical_depth = -np.log10(1 - np.random.rand(N))
 
         # fields at particle positions
         self.Ez = np.zeros(N)
@@ -107,16 +107,14 @@ class Particles(object):
                 self.Ex, self.Ey, self.Ez, 
                 self.Bx, self.By, self.Bz, 
                 self.ux, self.uy, self.uz,
-                1/self.inv_gamma, self.chi, self.N
+            self.inv_gamma, self.chi, self.N
             )
         if self.m == 0:
             pass
 
 
     def _radiate_photons(self, dt):
-        lcfa_photon_prob(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
-
-
+        event = lcfa_photon_prob(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
     def _create_pair(self, dt):
         pass
 
@@ -219,13 +217,14 @@ def boris_tbmt( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
     
 
 @njit(parallel=True, cache=True)
-def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, gamma, chi_e, N):
+def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N):
+    gamma = 1 / inv_gamma
     factor = e*hbar / (m_e**2 * c**3)
     for ip in prange(N):
         chi_e[ip] = factor * np.sqrt(
-            (gamma[ip]*Ex[ip] + (uy[ip]*Bz[ip] - uz[ip]*By[ip]))**2 +
-            (gamma[ip]*Ey[ip] + (uz[ip]*Bx[ip] - ux[ip]*Bz[ip]))**2 +
-            (gamma[ip]*Ez[ip] + (ux[ip]*By[ip] - uy[ip]*Bx[ip]))**2 -
+            (gamma[ip]*Ex[ip] + (uy[ip]*Bz[ip] - uz[ip]*By[ip])*c)**2 +
+            (gamma[ip]*Ey[ip] + (uz[ip]*Bx[ip] - ux[ip]*Bz[ip])*c)**2 +
+            (gamma[ip]*Ez[ip] + (ux[ip]*By[ip] - uy[ip]*Bx[ip])*c)**2 -
             (ux[ip]*Ex[ip] + uy[ip]*Ey[ip] + uz[ip]*Ez[ip])**2
         )
         
