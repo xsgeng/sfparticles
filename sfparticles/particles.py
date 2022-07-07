@@ -65,20 +65,29 @@ class Particles(object):
             assert len(props) == 6 or len(props) == 9, 'given properties must has length of 6 or 9'
 
             for prop in props:
-                assert len(prop.shape) == 1, 'given property is not vector'
-                assert prop.shape[0] == N, 'given N does not match given property length'
+                if isinstance(prop, np.ndarray):
+                    assert len(prop.shape) == 1, 'given property is not vector'
+                    assert prop.shape[0] == N, 'given N does not match given property length'
+                if isinstance(prop, (int, float)):
+                    assert N == 1, 'given N does not match given property length'
+                if isinstance(prop, (list, tuple)):
+                    assert len(prop) == N, 'given N does not match given property length'
+                
+            for i, prop in enumerate(props):
+                if isinstance(prop, (int, float)):
+                    props[i] = [prop]
 
             x, y, z, ux, uy, uz = props[:6]
             if len(props) == 9 and has_spin:
                 sx, sy, sz = props[7:]
 
         # position, momentum and spin vectors
-        self.x = x
-        self.y = y
-        self.z = z
-        self.ux = ux
-        self.uy = uy
-        self.uz = uz
+        self.x = np.asarray(x, dtype=np.float64)
+        self.y = np.asarray(y, dtype=np.float64)
+        self.z = np.asarray(z, dtype=np.float64)
+        self.ux = np.asarray(ux, dtype=np.float64)
+        self.uy = np.asarray(uy, dtype=np.float64)
+        self.uz = np.asarray(uz, dtype=np.float64)
 
         if self.has_spin:
             self.sx = sx
@@ -87,9 +96,9 @@ class Particles(object):
 
         # gamma factor
         if m > 0:
-            self.inv_gamma = 1./np.sqrt( 1 + ux**2 + uy**2 + uz**2 )
+            self.inv_gamma = 1./np.sqrt( 1 + self.ux**2 + self.uy**2 + self.uz**2 )
         else:
-            self.inv_gamma = 1./np.sqrt( ux**2 + uy**2 + uz**2 )
+            self.inv_gamma = 1./np.sqrt( self.ux**2 + self.uy**2 + self.uz**2 )
         
         # quantum parameter
         self.chi = np.zeros(N)
@@ -145,7 +154,8 @@ class Particles(object):
 
     def _radiate_photons(self, dt):
         event = lcfa_photon_prob(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
-        print(event.sum())
+
+        
     def _create_pair(self, dt):
         pass
 
@@ -170,7 +180,7 @@ def push_position( x, y, z, ux, uy, uz, inv_gamma, N, dt ):
 
 
 @njit(parallel=True, cache=True)
-def boris( ux, uy, uz, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
+def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
     """
     Advance the particles' momenta, using numba
     """
@@ -204,6 +214,7 @@ def boris( ux, uy, uz, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
         ux[ip] = ux_plus + efactor * Ex[ip]
         uy[ip] = uy_plus + efactor * Ey[ip]
         uz[ip] = uz_plus + efactor * Ez[ip]
+        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
     
 
 # TODO
@@ -242,10 +253,54 @@ def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N,
         ux[ip] = ux_plus + efactor * Ex[ip]
         uy[ip] = uy_plus + efactor * Ey[ip]
         uz[ip] = uz_plus + efactor * Ez[ip]
+        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
 
         # TBMT
         ...
     
+
+def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ):
+    """
+    Push at single macroparticle, using the Vay pusher
+    """
+    # Set a few constants
+    econst = q*dt/(m_e*c)
+    bconst = 0.5*q*dt/m_e
+
+    for ip in prange(N):
+        # Get the magnetic rotation vector
+        taux = bconst*Bx[ip]
+        tauy = bconst*By[ip]
+        tauz = bconst*Bz[ip]
+        tau2 = taux**2 + tauy**2 + tauz**2
+
+        # Get the momenta at the half timestep
+        uxp = ux[ip] + econst*Ex[ip] \
+        + inv_gamma[ip] *( uy[ip]*tauz - uz[ip]*tauy )
+        uyp = uy[ip] + econst*Ey[ip] \
+        + inv_gamma[ip] *( uz[ip]*taux - ux[ip]*tauz )
+        uzp = uz[ip] + econst*Ez[ip] \
+        + inv_gamma[ip] *( ux[ip]*tauy - uy[ip]*taux )
+        sigma = 1 + uxp**2 + uyp**2 + uzp**2 - tau2
+        utau = uxp*taux + uyp*tauy + uzp*tauz
+
+        # Get the new 1./gamma
+        inv_gamma_f = np.sqrt(
+            2./( sigma + np.sqrt( sigma**2 + 4*(tau2 + utau**2 ) ) ) )
+
+        # Reuse the tau and utau arrays to save memory
+        tx = inv_gamma_f*taux
+        ty = inv_gamma_f*tauy
+        tz = inv_gamma_f*tauz
+        ut = inv_gamma_f*utau
+        s = 1./( 1 + tau2*inv_gamma_f**2 )
+
+        # Get the new u
+        ux[ip] = s*( uxp + tx*ut + uyp*tz - uzp*ty )
+        uy[ip] = s*( uyp + ty*ut + uzp*tx - uxp*tz )
+        uz[ip] = s*( uzp + tz*ut + uxp*ty - uyp*tx )
+        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
+
 
 @njit(parallel=True, cache=True)
 def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N):
