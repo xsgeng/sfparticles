@@ -26,9 +26,9 @@ def init(N):
     x = gen.rand(N) * 1e-6
     y = gen.rand(N) * 1e-6
     z = gen.rand(N) * 1e-6
-    ux = gen.rand(N) * 100
-    uy = gen.rand(N) * 100
-    uz = gen.rand(N) * 100
+    ux = np.full(N, 2000)
+    uy = np.zeros(N)
+    uz = np.zeros(N)
     return (x, y, z, ux, uy, uz)
 
 laser1 = simple_laser_pulse(a0, w0, ctau)
@@ -36,13 +36,14 @@ laser2 = simple_laser_pulse(a0, w0, ctau, pol_angle=pi/2, cep=pi/2)
 
 laser = laser1 + laser2
 
-By = static_field(By=1E6)
+By = static_field(By=1E5)
 
-N = int(10000)
-step = 10000
-dt = 0.01*fs
+N = int(100000)
+step = 1000
+dt = 0.1*fs
 
 photons = Particles('photon', 0, 0, 0)
-electrons = Particles('electron', -1, 1, N, init(N), photon=photons)
-
+electrons = Particles('electron', -1, 1, N, props=init(N), photon=photons)
+print(electrons.optical_depth)
 simulate(electrons, step=step, dt=dt, field=By)
+print(electrons.chi)

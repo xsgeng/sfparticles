@@ -41,6 +41,10 @@ class Fields(object):
         )
 
 
+# TODO
+# def check_field_function():
+#     pass
+
 def simple_laser_pulse(a0, w0, ctau, x0=0, wavelength=0.8e-6, pol_angle=0, cep=0):
 
     omega0 = 2*pi*c / wavelength
@@ -71,3 +75,4 @@ def static_field(Ex=0, Ey=0, Ez=0, Bx=0, By=0, Bz=0):
     @njit
     def _static_field(x, y, z, t):
         return (Ex, Ey, Ez, Bx, By, Bz)
+    return Fields(_static_field)

@@ -4,7 +4,20 @@ from typing import Callable, List
 from .fields import Fields
 from .particles import Particles
 
-from numba import njit, prange
+from numba import njit, prange, get_num_threads
+
+# TODO:
+# class Simulation(object):
+#     def __init__(self) -> None:
+#         pass
+#     def add_particles(self, particles):
+#         pass
+#     def add_field(self, field):
+#         pass
+#     def add_diag_callback(self, diag_func):
+#         pass
+#     def start(self, nstep):
+#         pass
 
 
 def simulate(

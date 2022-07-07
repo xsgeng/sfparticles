@@ -6,13 +6,35 @@ from numba import njit, prange, guvectorize
 from sfparticles.qed import lcfa_photon_prob
 
 class Particles(object):
+    """
+    ## 粒子属性
+    - `q`, `m` : 电荷和质量，单位是e和m_e
+    - `x`, `y`, `z` : 空间坐标
+    - `ux`, `uy`, `uz` : 无量纲动量 p/mc
+    """
     def __init__(
         self, name : str,
-        q: float, m: float, N: int,
-        props : Tuple = None,
+        q: int, m: float, N: int,
         has_spin = False,
+        props : Tuple = None,
         photon = None, pair = None,
     ) -> None:
+        """
+        ## 初始化粒子
+
+        `q` : int
+            电荷，正负电子分别为±1
+        `m` : float
+            质量，以电子质量为单位
+        `N` : int
+            粒子数
+        `has_spin` : bool
+            是否包含自旋
+        `props` : Tuple(x, y, z, ux, uy, uz, [sx, sy, sz])
+            粒子的初始状态，可包含自旋矢量。如果`has_spin=True`且未给出sx, sy, sz，默认sz=1
+        `photon`, `pair` : Particles
+            辐射光子和产生电子对的类型
+        """
         self.name = name
         self.q = q * e
         self.m = m * m_e
@@ -84,12 +106,22 @@ class Particles(object):
 
     def _push_momentum(self, dt):
         if self.m > 0:
-            boris(
-                self.ux, self.uy, self.uz,
-                self.Ex, self.Ey, self.Ez, 
-                self.Bx, self.By, self.Bz,
-                self.q, self.N, dt
-            )
+            if self.has_spin:
+                boris_tbmt(
+                    self.ux, self.uy, self.uz,
+                    self.sx, self.sy, self.sz,
+                    self.inv_gamma,
+                    self.Ex, self.Ey, self.Ez, 
+                    self.Bx, self.By, self.Bz,
+                    self.q, self.N, dt
+                )
+            else:
+                boris(
+                    self.ux, self.uy, self.uz,
+                    self.Ex, self.Ey, self.Ez, 
+                    self.Bx, self.By, self.Bz,
+                    self.q, self.N, dt
+                )
 
 
     def _push_position(self, dt):
@@ -102,19 +134,18 @@ class Particles(object):
 
 
     def _calculate_chi(self):
-        if self.m > 0:
-            update_chi_e(
-                self.Ex, self.Ey, self.Ez, 
-                self.Bx, self.By, self.Bz, 
-                self.ux, self.uy, self.uz,
+        update_chi_e(
+            self.Ex, self.Ey, self.Ez, 
+            self.Bx, self.By, self.Bz, 
+            self.ux, self.uy, self.uz,
             self.inv_gamma, self.chi, self.N
-            )
-        if self.m == 0:
-            pass
+        )
+
 
 
     def _radiate_photons(self, dt):
         event = lcfa_photon_prob(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
+        print(event.sum())
     def _create_pair(self, dt):
         pass
 
@@ -177,7 +208,7 @@ def boris( ux, uy, uz, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
 
 # TODO
 @njit(parallel=True, cache=True)
-def boris_tbmt( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
+def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
     """
     Advance the particles' momenta, using numba
     """
