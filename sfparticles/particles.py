@@ -102,7 +102,7 @@ class Particles(object):
         
         # quantum parameter
         self.chi = np.zeros(N)
-        self.optical_depth = -np.log10(1 - np.random.rand(N))
+        self.optical_depth = -np.log(1 - np.random.rand(N))
 
         # fields at particle positions
         self.Ez = np.zeros(N)
@@ -154,7 +154,7 @@ class Particles(object):
 
     def _radiate_photons(self, dt):
         event = lcfa_photon_prob(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
-
+        return event
         
     def _create_pair(self, dt):
         pass
