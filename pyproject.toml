@@ -4,6 +4,7 @@ version = "0.0"
 dependencies = [
     "numpy",
     "numba",
-    "scipy"
+    "scipy",
+    "h5py",
 ]
 requires-python = ">=3.9"
