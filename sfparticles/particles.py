@@ -2,8 +2,9 @@ from typing import Tuple, Union
 import numpy as np
 from scipy.constants import c, m_e, e, hbar
 from numba import njit, prange, guvectorize
+from .fields import Fields
 
-from sfparticles.qed import update_optical_depth
+from .qed import update_optical_depth
 
 class Particles(object):
     """
@@ -140,6 +141,14 @@ class Particles(object):
             self.ux, self.uy, self.uz, 
             self.inv_gamma, 
             self.N, dt
+        )
+
+
+    def _eval_field(self, fields : Fields, t):
+        fields.field_func(
+            self.x, self.y, self.z, t, self.N, 
+            self.Ex, self.Ey, self.Ez, 
+            self.Bx, self.By, self.Bz
         )
 
 

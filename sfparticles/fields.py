@@ -33,13 +33,6 @@ class Fields(object):
         return Fields(out)
 
 
-    def _eval_field(self, particles, t):
-        self.field_func(
-            particles.x, particles.y, particles.z, t, particles.N, 
-            particles.Ex, particles.Ey, particles.Ez, 
-            particles.Bx, particles.By, particles.Bz
-        )
-
 
 # TODO
 # def check_field_function():

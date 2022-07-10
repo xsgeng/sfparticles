@@ -24,7 +24,7 @@ def simulate(
     *all_particles : Particles,
     step: int,
     dt: float,
-    field : Fields = None,
+    fields : Fields = None,
 ):
 
     t = 0.0
@@ -33,8 +33,8 @@ def simulate(
     for istep in range(step):
         # push particles
         for particles in all_particles:
-            if field:
-                field._eval_field(particles, t)
+            if fields:
+                particles._eval_field(fields, t)
 
             particles._push_position(0.5*dt)
             particles._push_momentum(dt)

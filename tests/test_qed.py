@@ -31,17 +31,11 @@ def prob_rate_delta(chi_e):
     return prob_
 
 
-class TestQED(unittest.TestCase):
-    def setUp(self) -> None:
-        print('setup')
-        return super().setUp()
+class TestPhotonNumber(unittest.TestCase):
     def test_photon_number(self):
         gamma = 10000
         ux = np.sqrt(gamma**2 - 1)
-
         Bfield_from_chi = lambda chi_e : static_field(Bz=chi_e * m_e**2*c**2/e/hbar / ux)
-
-        
 
         N = 1_000_000
         p = Particles(
@@ -57,10 +51,10 @@ class TestQED(unittest.TestCase):
         for chi_e in [0.1, 0.5, 1, 2, 5]:
             with self.subTest(chi_e=chi_e):
                 Bfield = Bfield_from_chi(chi_e)
-                Bfield._eval_field(p, 0)
+                p._eval_field(Bfield, 0)
                 p._calculate_chi()
 
-                event = p._radiate_photons(interval)
+                event, _ = p._radiate_photons(interval)
                 n_photon = event.sum()/N
                 
                 P = prob_rate_delta(chi_e)
