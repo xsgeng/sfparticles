@@ -147,7 +147,7 @@ def table_gen(
         dset.attrs['z_range'] = (z_min, z_max)
         dset.attrs['z_delta'] = (z_max - z_min) / (z_N - 1)
 
-        print("integrating photon emission probability rate over delta")
+        print("计算不同chi_e的总辐射概率")
         dset = h5f.create_dataset('photon_prob_rate_total', data=photon_prob_rate_total(chi_N, log_chi_min, log_chi_max))
         dset.attrs['chi_N'] = chi_N
         dset.attrs['log_chi_range'] = (log_chi_min, log_chi_max)

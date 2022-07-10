@@ -7,7 +7,7 @@ from scipy.constants import alpha, pi, m_e, hbar, c
 '''
 Optical depth
 '''
-from .tables import integ_prob_rate_from_table
+from .tables import integ_prob_rate_from_table, delta_from_chi_delta_table
 
 
 
