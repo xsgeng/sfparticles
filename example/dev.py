@@ -22,11 +22,12 @@ ctau = 10*um
 a0_norm = e / (m_e * c * omega0)
 
 gen = np.random.RandomState(0)
+ux0 = 2000
 def init(N):
-    x = gen.rand(N) * 1e-6
-    y = gen.rand(N) * 1e-6
-    z = gen.rand(N) * 1e-6
-    ux = np.full(N, 2000)
+    x = np.zeros(N)
+    y = np.zeros(N)
+    z = np.zeros(N)
+    ux = np.full(N, ux0)
     uy = np.zeros(N)
     uz = np.zeros(N)
     return (x, y, z, ux, uy, uz)
@@ -36,14 +37,29 @@ laser2 = simple_laser_pulse(a0, w0, ctau, pol_angle=pi/2, cep=pi/2)
 
 laser = laser1 + laser2
 
-By = static_field(By=1E5)
+Bz0 = 1E4
+Bz = static_field(Bz=Bz0)
 
-N = int(100000)
-step = 1000
-dt = 0.1*fs
+R = m_e*c*ux0 / e / Bz0
+T = 2*pi*R / c
 
-photons = Particles('photon', 0, 0, 0)
-electrons = Particles('electron', -1, 1, N, props=init(N), photon=photons)
-print(electrons.optical_depth)
-simulate(electrons, step=step, dt=dt, field=By)
-print(electrons.chi)
+N = int(10000)
+step = 2000
+dt = T / 2 / step
+
+photons = Particles('photon', 0, 0)
+electrons = Particles('electron', q=-1, m=1, N=N, props=init(N), photon=photons)
+
+simulate(electrons, photons, step=step, dt=dt, fields=Bz)
+print(photons.N, photons.N/N/step, photons.buffer_size)
+
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+
+ax.hist2d(
+    electrons.x/1E-6, electrons.y/1E-6, bins=1024, range=[[-R/1E-6, R/1E-6], [0, 2*R/1E-6]]
+)
+
+fig.savefig('test.png', dpi=300)
+
