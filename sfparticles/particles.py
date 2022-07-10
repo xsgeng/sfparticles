@@ -15,7 +15,7 @@ class Particles(object):
     """
     def __init__(
         self, name : str,
-        q: int, m: float, N: int,
+        q: int, m: float, N: int = 0,
         has_spin = False,
         props : Tuple = None,
         photon = None, pair = None,
@@ -33,6 +33,7 @@ class Particles(object):
             是否包含自旋
         `props` : Tuple(x, y, z, ux, uy, uz, [sx, sy, sz])
             粒子的初始状态，可包含自旋矢量。如果`has_spin=True`且未给出sx, sy, sz，默认sz=1
+            这些属性向量的长度为buffer的长度，前N个为粒子的属性。
         `photon`, `pair` : Particles
             辐射光子和产生电子对的类型
         """
@@ -113,6 +114,9 @@ class Particles(object):
         self.Bx = np.zeros(N)
         self.By = np.zeros(N)
 
+        # buffer
+        self.buffer_size = N
+
 
     def _push_momentum(self, dt):
         if self.m > 0:
@@ -191,26 +195,38 @@ class Particles(object):
 
 
     def _append(self, props, N_new):
-        self.x = np.append(self.ux, props[0])
-        self.y = np.append(self.uy, props[1])
-        self.z = np.append(self.uz, props[2])
+        
+        
+        # extend buffer
+        if (self.buffer_size - self.N) < N_new:
+            append_buffer = np.zeros(N_new + self.buffer_size)
+            for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth'):
+                # self.* = np.concatenate((self.*, append_buffer))
+                setattr(self, attr, np.concatenate((getattr(self, attr), append_buffer)))
 
-        self.ux = np.append(self.ux, props[3])
-        self.uy = np.append(self.uy, props[4])
-        self.uz = np.append(self.uz, props[5])
+            if self.has_spin:
+                self.sx = np.concatenate((self.sx, append_buffer))
+                self.sy = np.concatenate((self.sy, append_buffer))
+                self.sz = np.concatenate((self.sz, append_buffer))
+
+            # new buffer size
+            self.buffer_size += self.N + N_new
+
+        for i, attr in enumerate(('x', 'y', 'z', 'ux', 'uy', 'uz')):
+            getattr(self, attr)[self.N:self.N+N_new] = props[i]
 
         if self.m > 0:
-            self.inv_gamma = np.append(self.inv_gamma, 1 / np.sqrt(1 + props[3]**2 + props[4]**2 + props[5]**2))
+            inv_gamma = 1 / np.sqrt(1 + props[3]**2 + props[4]**2 + props[5]**2)
         if self.m == 0:
-            self.inv_gamma = np.append(self.inv_gamma, 1 / np.sqrt(props[3]**2 + props[4]**2 + props[5]**2))
+            inv_gamma = 1 / np.sqrt(props[3]**2 + props[4]**2 + props[5]**2)
+        self.inv_gamma[self.N:self.N+N_new] = inv_gamma
 
         if self.has_spin:
-            self.sx = np.append(self.sx, props[6])
-            self.sy = np.append(self.sy, props[7])
-            self.sz = np.append(self.sz, props[8])
+            self.ux[self.N:self.N+N_new] = props[6]
+            self.uy[self.N:self.N+N_new] = props[7]
+            self.uz[self.N:self.N+N_new] = props[8]
 
         self.N += N_new
-
 
 
 @njit(parallel=True, cache=True)
