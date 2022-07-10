@@ -26,10 +26,10 @@ def prob_rate_from_chi_e(chi_e):
 # TODO
 @njit
 def delta_from_chi_delta_table(chi_e):
-    return 0
+    return random.rand()
 
 @njit(parallel=True, cache=True)
-def lcfa_photon_prob(optical_depth, inv_gamma, chi_e, dt, N):
+def update_optical_depth(optical_depth, inv_gamma, chi_e, dt, N):
     event = full(N, False)
     delta = zeros(N)
     for ip in prange(N):
@@ -42,4 +42,4 @@ def lcfa_photon_prob(optical_depth, inv_gamma, chi_e, dt, N):
             event[ip] = True
             delta[ip] = delta_from_chi_delta_table(chi_e[ip])
 
-    return event#, delta
+    return event, delta

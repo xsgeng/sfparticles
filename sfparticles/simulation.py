@@ -44,9 +44,9 @@ def simulate(
         for particles in all_particles:
             particles._calculate_chi()
             if particles.photon:
-                photons = particles._radiate_photons(dt)
+                particles._radiate_photons(dt)
             if particles.pair:
-                bw_pair = particles._create_pair(dt)
+                particles._create_pair(dt)
         t += dt*istep
 
     toc = perf_counter_ns()

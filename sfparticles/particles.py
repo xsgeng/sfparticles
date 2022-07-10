@@ -3,7 +3,7 @@ import numpy as np
 from scipy.constants import c, m_e, e, hbar
 from numba import njit, prange, guvectorize
 
-from sfparticles.qed import lcfa_photon_prob
+from sfparticles.qed import update_optical_depth
 
 class Particles(object):
     """
@@ -127,6 +127,7 @@ class Particles(object):
             else:
                 boris(
                     self.ux, self.uy, self.uz,
+                    self.inv_gamma,
                     self.Ex, self.Ey, self.Ez, 
                     self.Bx, self.By, self.Bz,
                     self.q, self.N, dt
@@ -153,15 +154,53 @@ class Particles(object):
 
 
     def _radiate_photons(self, dt):
-        event = lcfa_photon_prob(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
-        return event
+        event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
+
+        if self.photon:
+            photon_props = (
+                self.x[event],
+                self.y[event],
+                self.z[event],
+                self.ux[event] * photon_delta[event],
+                self.uy[event] * photon_delta[event],
+                self.uz[event] * photon_delta[event],
+            )
+            self.photon._append(photon_props, event.sum())
+
+        # RR
+        # self.ux[event] *= (1-photon_delta[event])
+        # self.uy[event] *= (1-photon_delta[event])
+        # self.uz[event] *= (1-photon_delta[event])
+        # self.inv_gamma[event] = 1 / np.sqrt(1 + self.ux[event]**2 + self.uy[event]**2 + self.uz[event]**2)
+        radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, event, photon_delta, self.N)
+
+        return event, photon_delta
         
     def _create_pair(self, dt):
         pass
 
 
-    def _append(self, props):
-        pass
+    def _append(self, props, N_new):
+        self.x = np.append(self.ux, props[0])
+        self.y = np.append(self.uy, props[1])
+        self.z = np.append(self.uz, props[2])
+
+        self.ux = np.append(self.ux, props[3])
+        self.uy = np.append(self.uy, props[4])
+        self.uz = np.append(self.uz, props[5])
+
+        if self.m > 0:
+            self.inv_gamma = np.append(self.inv_gamma, 1 / np.sqrt(1 + props[3]**2 + props[4]**2 + props[5]**2))
+        if self.m == 0:
+            self.inv_gamma = np.append(self.inv_gamma, 1 / np.sqrt(props[3]**2 + props[4]**2 + props[5]**2))
+
+        if self.has_spin:
+            self.sx = np.append(self.sx, props[6])
+            self.sy = np.append(self.sy, props[7])
+            self.sz = np.append(self.sz, props[8])
+
+        self.N += N_new
+
 
 
 @njit(parallel=True, cache=True)
@@ -313,4 +352,13 @@ def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N):
             (gamma[ip]*Ez[ip] + (ux[ip]*By[ip] - uy[ip]*Bx[ip])*c)**2 -
             (ux[ip]*Ex[ip] + uy[ip]*Ey[ip] + uz[ip]*Ez[ip])**2
         )
+
+@njit(parallel=True, cache=True)
+def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N):
+    for ip in prange(N):
+        if event[ip]:
+            ux[ip] *= 1 - photon_delta[ip]
+            uy[ip] *= 1 - photon_delta[ip]
+            uz[ip] *= 1 - photon_delta[ip]
+            inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
         
