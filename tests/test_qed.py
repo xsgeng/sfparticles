@@ -8,7 +8,6 @@ import numpy as np
 
 from sfparticles.particles import Particles
 from sfparticles.fields import static_field
-from sfparticles.qed import prob_rate_from_chi_e
 
 
 def Ai(z):
@@ -48,7 +47,7 @@ class TestPhotonNumber(unittest.TestCase):
 
         interval = 1e-17
         tau = interval / gamma
-        for chi_e in [0.1, 0.5, 1, 2, 5]:
+        for chi_e in [0.1, 0.5, 1.0, 2.0, 5.0]:
             with self.subTest(chi_e=chi_e):
                 Bfield = Bfield_from_chi(chi_e)
                 p._eval_field(Bfield, 0)
@@ -61,4 +60,4 @@ class TestPhotonNumber(unittest.TestCase):
                 prob_rate_total, err = quad(P, 0, 1)
                 n_photon_expected = prob_rate_total * tau
 
-                self.assertLess(abs(n_photon-n_photon_expected)/n_photon_expected, 0.05)
+                self.assertLess(abs(n_photon-n_photon_expected)/n_photon_expected, 0.05, f'n_photon={n_photon}, n_photon_expected={n_photon_expected}')

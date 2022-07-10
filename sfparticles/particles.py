@@ -4,7 +4,7 @@ from scipy.constants import c, m_e, e, hbar
 from numba import njit, prange, guvectorize
 from .fields import Fields
 
-from .qed import update_optical_depth
+from .qed import photon_from_rejection_sampling, update_optical_depth
 
 class Particles(object):
     """
@@ -163,7 +163,8 @@ class Particles(object):
 
 
     def _radiate_photons(self, dt):
-        event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
+        # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
+        event, photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N)
 
         if self.photon:
             photon_props = (
