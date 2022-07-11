@@ -20,7 +20,7 @@ def Aip(z):
 def int_Ai(z):
     return quad(Ai, z, np.inf)[0]
 
-def prob_rate_delta(chi_e):
+def photon_prob_rate_delta(chi_e):
     factor = -alpha*m_e*c**2/hbar
     def prob_(delta):
         z = (delta/(1-delta)/chi_e)**(2/3)
@@ -29,9 +29,20 @@ def prob_rate_delta(chi_e):
 
     return prob_
 
+def pair_prob_rate_delta(chi_gamma):
+    factor = alpha*m_e*c**2/hbar
+    def prob_(delta):
+        chi_e = delta * chi_gamma
+        chi_ep = chi_gamma - chi_e
+        z = (chi_gamma/chi_e/chi_ep)**(2/3)
+        return factor*(int_Ai(z) + (2.0/z - chi_gamma*np.sqrt(z)) * Aip(z))
+
+    return prob_
+
 
 class TestPhotonNumber(unittest.TestCase):
     def test_photon_number(self):
+        tor = 0.1 # 10%
         gamma = 10000
         ux = np.sqrt(gamma**2 - 1)
         Bfield_from_chi = lambda chi_e : static_field(Bz=chi_e * m_e**2*c**2/e/hbar / ux)
@@ -56,8 +67,42 @@ class TestPhotonNumber(unittest.TestCase):
                 event, _ = p._radiate_photons(interval)
                 n_photon = event.sum()/N
                 
-                P = prob_rate_delta(chi_e)
+                P = photon_prob_rate_delta(chi_e)
                 prob_rate_total, err = quad(P, 0, 1)
                 n_photon_expected = prob_rate_total * tau
 
-                self.assertLess(abs(n_photon-n_photon_expected)/n_photon_expected, 0.05, f'n_photon={n_photon}, n_photon_expected={n_photon_expected}')
+                self.assertLess(abs(n_photon-n_photon_expected)/n_photon_expected, tor, f'n_photon={n_photon}, n_photon_expected={n_photon_expected}')
+    
+    def test_pair_number(self):
+        tor = 0.1 # 10%
+        gamma = 10000
+        ux = gamma
+        Bfield_from_chi = lambda chi_gamma : static_field(Bz=chi_gamma * m_e**2*c**2/e/hbar / ux)
+
+        N = 1_000_000
+        p = Particles(
+            'pho', 0, 0, N=N,
+            props=(
+                np.zeros(N), np.zeros(N), np.zeros(N), 
+                np.full(N, ux), np.zeros(N), np.zeros(N), 
+            ),
+        )
+
+        interval = 1e-16
+        tau = interval / gamma
+        for chi_gamma in [1.0, 2.0, 5.0]:
+            with self.subTest(chi_gamma=chi_gamma):
+                Bfield = Bfield_from_chi(chi_gamma)
+                p._eval_field(Bfield, 0)
+                p._calculate_chi()
+
+                event, _ = p._create_pair(interval)
+                n_pair = event.sum()/N
+                
+                P = pair_prob_rate_delta(chi_gamma)
+                prob_rate_total, err = quad(P, 0, 1)
+                n_pair_expected = prob_rate_total * tau
+
+                print(n_pair, n_pair_expected)
+
+                self.assertLess(abs(n_pair-n_pair_expected)/n_pair_expected, tor, f'n_pair={n_pair}, n_pair_expected={n_pair_expected}')

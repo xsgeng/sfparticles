@@ -12,7 +12,7 @@ class TestParticlesInit(unittest.TestCase):
         p = Particles('e', q=-1, m=1, N=2)
         self.assertEqual(p.q, -e)
         self.assertEqual(p.m, m_e)
-        self.assertEqual(p.N, 2)
+        self.assertEqual(p.N_buffered, 2)
 
         for prop, i in product(['', 'u', 'E', 'B'], ['x', 'y', 'z']):
             attr = prop + i
@@ -37,7 +37,7 @@ class TestParticlesInit(unittest.TestCase):
         p = Particles('e', q=-1, m=1, N=3, props=[[1, 2, 3]]*6)
         target = np.array([1, 2, 3], dtype=np.float64)
         
-        self.assertEqual(p.N, 3)
+        self.assertEqual(p.N_buffered, 3)
 
         for prop, i in product(['', 'u'], ['x', 'y', 'z']):
             attr = prop + i
@@ -49,7 +49,7 @@ class TestParticlesInit(unittest.TestCase):
         p = Particles('e', q=-1, m=1, N=1, props=[1]*6)
         target = np.array([1], dtype=np.float64)
 
-        self.assertEqual(p.N, 1)
+        self.assertEqual(p.N_buffered, 1)
 
         for prop, i in product(['', 'u'], ['x', 'y', 'z']):
             attr = prop + i
@@ -65,12 +65,12 @@ class TestParticleResize(unittest.TestCase):
         p = Particles('e', 1, 1, 5, has_spin=True)
 
         p._append(([1]*N_new1)*6, N_new1)
-        self.assertEqual(p.N, N + N_new1)
+        self.assertEqual(p.N_buffered, N + N_new1)
         self.assertEqual(p.buffer_size, 2*N + N_new1)
         self.assertEqual(p.x.shape[0], p.buffer_size)
 
         p._append(([2]*N_new2)*6, N_new2)
-        self.assertEqual(p.N, N + N_new1 + N_new2)
+        self.assertEqual(p.N_buffered, N + N_new1 + N_new2)
         self.assertEqual(p.buffer_size, (2*N + N_new1) + N_new2 + (N + N_new1))
 
 

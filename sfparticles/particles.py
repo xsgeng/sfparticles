@@ -4,7 +4,7 @@ from scipy.constants import c, m_e, e, hbar
 from numba import njit, prange, guvectorize
 from .fields import Fields
 
-from .qed import photon_from_rejection_sampling, update_optical_depth
+from .qed import photon_from_rejection_sampling, pair_from_rejection_sampling, update_optical_depth
 
 class Particles(object):
     """
@@ -18,7 +18,6 @@ class Particles(object):
         q: int, m: float, N: int = 0,
         has_spin = False,
         props : Tuple = None,
-        photon = None, pair = None,
     ) -> None:
         """
         ## 初始化粒子
@@ -35,21 +34,16 @@ class Particles(object):
             粒子的初始状态，可包含自旋矢量。如果`has_spin=True`且未给出sx, sy, sz，默认sz=1
             这些属性向量的长度为buffer的长度，前N个为粒子的属性。
         `photon`, `pair` : Particles
-            辐射光子和产生电子对的类型
+            辐射光子和产生电子对的对象。
+            pair = (electron, positron)
         """
         self.name = name
         self.q = q * e
         self.m = m * m_e
-        self.N = int(N)
         self.has_spin = has_spin
+        N = int(N)
 
         assert m >= 0, 'negative mass'
-        if m > 0:
-            assert pair is None, 'massive particle cannot create BW pair'
-        if m == 0:
-            assert photon is None, 'photon cannot radiate photon'
-        self.photon = photon
-        self.pair = pair
 
         if props is None:
             x = np.zeros(N)
@@ -115,9 +109,29 @@ class Particles(object):
         self.By = np.zeros(N)
 
         # buffer
+        self.N_buffered = N
         self.buffer_size = N
 
+        # prune flag
+        self._to_be_pruned = np.full(N, False)
 
+
+    def set_photon(self, photon):
+        assert self.m > 0, 'photon cannot radiate photon'
+        assert isinstance(photon, Particles), 'photon must be Particle class'
+        assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
+        self.photon = photon
+
+    def set_pair(self, pair):
+        assert self.m == 0, 'massive particle cannot create BW pair'
+        assert isinstance(pair, (tuple, list)), 'pair must be tuple or list'
+        assert isinstance(pair[0], Particles) and isinstance(pair[0], Particles), 'pair must be tuple or list of Particle class'
+        assert len(pair) == 2, 'length of pair must be 2'
+        assert pair[0].m == m_e and pair[0].q == -e, 'first of the pair must be electron'
+        assert pair[1].m == m_e and pair[1].q ==  e, 'second of the pair must be positron'
+        self.pair = pair
+
+        
     def _push_momentum(self, dt):
         if self.m > 0:
             if self.has_spin:
@@ -127,7 +141,7 @@ class Particles(object):
                     self.inv_gamma,
                     self.Ex, self.Ey, self.Ez, 
                     self.Bx, self.By, self.Bz,
-                    self.q, self.N, dt
+                    self.q, self.N_buffered, self._to_be_pruned, dt
                 )
             else:
                 boris(
@@ -135,7 +149,7 @@ class Particles(object):
                     self.inv_gamma,
                     self.Ex, self.Ey, self.Ez, 
                     self.Bx, self.By, self.Bz,
-                    self.q, self.N, dt
+                    self.q, self.N_buffered, self._to_be_pruned, dt
                 )
 
 
@@ -144,13 +158,13 @@ class Particles(object):
             self.x, self.y, self.z, 
             self.ux, self.uy, self.uz, 
             self.inv_gamma, 
-            self.N, dt
+            self.N_buffered, self._to_be_pruned, dt
         )
 
 
     def _eval_field(self, fields : Fields, t):
         fields.field_func(
-            self.x, self.y, self.z, t, self.N, 
+            self.x, self.y, self.z, t, self.N_buffered, self._to_be_pruned,
             self.Ex, self.Ey, self.Ez, 
             self.Bx, self.By, self.Bz
         )
@@ -161,48 +175,70 @@ class Particles(object):
             self.Ex, self.Ey, self.Ez, 
             self.Bx, self.By, self.Bz, 
             self.ux, self.uy, self.uz,
-            self.inv_gamma, self.chi, self.N
+            self.inv_gamma, self.chi, self.N_buffered, self._to_be_pruned, 
         )
 
 
 
     def _radiate_photons(self, dt):
-        # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size)
-        event, photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size)
-
-        if self.photon:
+        # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
+        event, photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
+        hard_photon = (photon_delta * 1 / self.inv_gamma) > 2
+        photon_event = event & hard_photon & ~self._to_be_pruned
+        if hasattr(self, 'photon'):
             photon_props = (
-                self.x[event],
-                self.y[event],
-                self.z[event],
-                self.ux[event] * photon_delta[event],
-                self.uy[event] * photon_delta[event],
-                self.uz[event] * photon_delta[event],
+                self.x[photon_event],
+                self.y[photon_event],
+                self.z[photon_event],
+                self.ux[photon_event] * photon_delta[photon_event],
+                self.uy[photon_event] * photon_delta[photon_event],
+                self.uz[photon_event] * photon_delta[photon_event],
             )
-            self.photon._append(photon_props, event.sum())
+            self.photon._append(photon_props, photon_event.sum())
 
         # RR
-        # self.ux[event] *= (1-photon_delta[event])
-        # self.uy[event] *= (1-photon_delta[event])
-        # self.uz[event] *= (1-photon_delta[event])
-        # self.inv_gamma[event] = 1 / np.sqrt(1 + self.ux[event]**2 + self.uy[event]**2 + self.uz[event]**2)
-        radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, event, photon_delta, self.N)
+        radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, event, photon_delta, self.N_buffered, self._to_be_pruned)
 
         return event, photon_delta
         
     def _create_pair(self, dt):
-        pass
+        
+        event, pair_delta = pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
+        if hasattr(self, 'pair'):
+            electron_props = (
+                self.x[event],
+                self.y[event],
+                self.z[event],
+                self.ux[event] * pair_delta[event],
+                self.uy[event] * pair_delta[event],
+                self.uz[event] * pair_delta[event],
+            )
+            positron_props = (
+                self.x[event],
+                self.y[event],
+                self.z[event],
+                self.ux[event] * (1-pair_delta[event]),
+                self.uy[event] * (1-pair_delta[event]),
+                self.uz[event] * (1-pair_delta[event]),
+            )
+            self.pair[0]._append(electron_props, event.sum())
+            self.pair[1]._append(positron_props, event.sum())
+
+        # mark photon as deleted
+        self._to_be_pruned[event] = True
+
+        return event, pair_delta
 
 
     def _append(self, props, N_new):
-        
-        
         # extend buffer
-        if (self.buffer_size - self.N) < N_new:
-            append_buffer = np.zeros(self.N + N_new)
+        if (self.buffer_size - self.N_buffered) < N_new:
+            append_buffer = np.zeros(self.N_buffered + N_new)
             for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth'):
                 # self.* = np.concatenate((self.*, append_buffer))
                 setattr(self, attr, np.concatenate((getattr(self, attr), append_buffer)))
+
+            self._to_be_pruned = np.concatenate((self._to_be_pruned, np.full(self.N_buffered + N_new, True)))
 
             if self.has_spin:
                 self.sx = np.concatenate((self.sx, append_buffer))
@@ -210,27 +246,39 @@ class Particles(object):
                 self.sz = np.concatenate((self.sz, append_buffer))
 
             # new buffer size
-            self.buffer_size += self.N + N_new
+            self.buffer_size += self.N_buffered + N_new
 
+        # update r and u
         for i, attr in enumerate(('x', 'y', 'z', 'ux', 'uy', 'uz')):
-            getattr(self, attr)[self.N:self.N+N_new] = props[i]
+            getattr(self, attr)[self.N_buffered:self.N_buffered+N_new] = props[i]
 
+        # update inv_gamma
         if self.m > 0:
             inv_gamma = 1 / np.sqrt(1 + props[3]**2 + props[4]**2 + props[5]**2)
         if self.m == 0:
             inv_gamma = 1 / np.sqrt(props[3]**2 + props[4]**2 + props[5]**2)
-        self.inv_gamma[self.N:self.N+N_new] = inv_gamma
+        self.inv_gamma[self.N_buffered:self.N_buffered+N_new] = inv_gamma
 
+        # spin
         if self.has_spin:
-            self.ux[self.N:self.N+N_new] = props[6]
-            self.uy[self.N:self.N+N_new] = props[7]
-            self.uz[self.N:self.N+N_new] = props[8]
+            self.ux[self.N_buffered:self.N_buffered+N_new] = props[6]
+            self.uy[self.N_buffered:self.N_buffered+N_new] = props[7]
+            self.uz[self.N_buffered:self.N_buffered+N_new] = props[8]
 
-        self.N += N_new
+        self._to_be_pruned[self.N_buffered:self.N_buffered+N_new] = False
+        self.N_buffered += N_new
+
+    def _prune(self):
+        selected = ~self._to_be_pruned
+        N = selected.sum()
+        for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth', '_to_be_pruned'):
+            setattr(self, attr, (getattr(self, attr))[selected])
+        self.buffer_size = N
+        self.N_buffered = N
 
 
-@njit(parallel=True, cache=True)
-def push_position( x, y, z, ux, uy, uz, inv_gamma, N, dt ):
+@njit(parallel=True, cache=False)
+def push_position( x, y, z, ux, uy, uz, inv_gamma, N, to_be_pruned, dt ):
     """
     Advance the particles' positions over `dt` using the momenta `ux`, `uy`, `uz`,
     """
@@ -239,13 +287,15 @@ def push_position( x, y, z, ux, uy, uz, inv_gamma, N, dt ):
 
     # Particle push (in parallel if threading is installed)
     for ip in prange(N) :
+        if to_be_pruned[ip]:
+            continue
         x[ip] += cdt * inv_gamma[ip] * ux[ip]
         y[ip] += cdt * inv_gamma[ip] * uy[ip]
         z[ip] += cdt * inv_gamma[ip] * uz[ip]
 
 
-@njit(parallel=True, cache=True)
-def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
+@njit(parallel=True, cache=False)
+def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
     """
     Advance the particles' momenta, using numba
     """
@@ -253,6 +303,8 @@ def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
     bfactor = q*dt/(2*m_e)
 
     for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
         # E field
         ux_minus = ux[ip] + efactor * Ex[ip]
         uy_minus = uy[ip] + efactor * Ey[ip]
@@ -283,8 +335,8 @@ def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
     
 
 # TODO
-@njit(parallel=True, cache=True)
-def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ) :
+@njit(parallel=True, cache=False)
+def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
     """
     Advance the particles' momenta, using numba
     """
@@ -292,6 +344,8 @@ def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N,
     bfactor = q*dt/(2*m_e)
 
     for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
         # E field
         ux_minus = ux[ip] + efactor * Ex[ip]
         uy_minus = uy[ip] + efactor * Ey[ip]
@@ -324,7 +378,7 @@ def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N,
         ...
     
 
-def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ):
+def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ):
     """
     Push at single macroparticle, using the Vay pusher
     """
@@ -333,6 +387,8 @@ def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ):
     bconst = 0.5*q*dt/m_e
 
     for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
         # Get the magnetic rotation vector
         taux = bconst*Bx[ip]
         tauy = bconst*By[ip]
@@ -367,11 +423,13 @@ def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, dt ):
         inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
 
 
-@njit(parallel=True, cache=True)
-def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N):
+@njit(parallel=True, cache=False)
+def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
     gamma = 1 / inv_gamma
     factor = e*hbar / (m_e**2 * c**3)
     for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
         chi_e[ip] = factor * np.sqrt(
             (gamma[ip]*Ex[ip] + (uy[ip]*Bz[ip] - uz[ip]*By[ip])*c)**2 +
             (gamma[ip]*Ey[ip] + (uz[ip]*Bx[ip] - ux[ip]*Bz[ip])*c)**2 +
@@ -379,9 +437,11 @@ def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N):
             (ux[ip]*Ex[ip] + uy[ip]*Ey[ip] + uz[ip]*Ez[ip])**2
         )
 
-@njit(parallel=True, cache=True)
-def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N):
+@njit(parallel=True, cache=False)
+def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
     for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
         if event[ip]:
             ux[ip] *= 1 - photon_delta[ip]
             uy[ip] *= 1 - photon_delta[ip]

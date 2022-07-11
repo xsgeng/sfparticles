@@ -22,7 +22,7 @@ ctau = 10*um
 a0_norm = e / (m_e * c * omega0)
 
 gen = np.random.RandomState(0)
-ux0 = 2000
+ux0 = 10000
 def init(N):
     x = np.zeros(N)
     y = np.zeros(N)
@@ -37,7 +37,7 @@ laser2 = simple_laser_pulse(a0, w0, ctau, pol_angle=pi/2, cep=pi/2)
 
 laser = laser1 + laser2
 
-Bz0 = 1E4
+Bz0 = 1E6
 Bz = static_field(Bz=Bz0)
 
 R = m_e*c*ux0 / e / Bz0
@@ -45,13 +45,19 @@ T = 2*pi*R / c
 
 N = int(10000)
 step = 2000
-dt = T / 2 / step
+dt = T / 4 / step
 
 photons = Particles('photon', 0, 0)
-electrons = Particles('electron', q=-1, m=1, N=N, props=init(N), photon=photons)
+positrons = Particles('positron', q=1, m=1)
+electrons = Particles('electron', q=-1, m=1, N=N, props=init(N))
 
-simulate(electrons, photons, step=step, dt=dt, fields=Bz)
-print(photons.N, photons.N/N/step, photons.buffer_size)
+photons.set_pair((electrons, positrons))
+electrons.set_photon(photons)
+positrons.set_photon(photons)
+
+simulate(electrons, positrons, photons, step=step, dt=dt, fields=Bz)
+
+print(positrons.x.shape[0], photons.x.shape[0], photons.chi.max())
 
 import matplotlib.pyplot as plt
 

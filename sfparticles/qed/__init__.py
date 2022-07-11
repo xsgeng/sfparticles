@@ -9,11 +9,13 @@ Optical depth
 '''
 from .tables import integ_prob_rate_from_table, delta_from_chi_delta_table
 
-@njit(parallel=True, cache=True)
-def update_optical_depth(optical_depth, inv_gamma, chi_e, dt, N):
+@njit(parallel=True, cache=False)
+def update_optical_depth(optical_depth, inv_gamma, chi_e, dt, N, to_be_pruned):
     event = full(N, False)
     delta = zeros(N)
     for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
         integ_prob_rate = integ_prob_rate_from_table(chi_e[ip])
         dtau = dt * inv_gamma[ip]
         optical_depth[ip] -= integ_prob_rate * dtau
@@ -28,20 +30,39 @@ def update_optical_depth(optical_depth, inv_gamma, chi_e, dt, N):
 '''
 Rejection_sampling
 '''
-from .tables import prob_rate_from_table
+from .tables import photon_prob_rate_from_table, pair_prob_rate_from_table
 
-@njit(parallel=True, cache=True)
-def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N):
+@njit(parallel=True, cache=False)
+def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned):
     event = full(N, False)
     delta = zeros(N)
     for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
         r1, r2 = random.rand(2)
         dtau = dt * inv_gamma[ip]
 
         # modified event generator by Gonoskov 2015
-        prob_rate = 3*r1**2 * prob_rate_from_table(chi_e[ip], r1**3) * dtau
+        prob_rate = 3*r1**2 * photon_prob_rate_from_table(chi_e[ip], r1**3) * dtau
         if r2 < prob_rate:
             delta[ip] = r1**3
+            event[ip] = True
+
+    return event, delta
+
+@njit(parallel=True, cache=False)
+def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned):
+    event = full(N, False)
+    delta = zeros(N)
+    for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
+        r1, r2 = random.rand(2)
+        dtau = dt * inv_gamma[ip]
+
+        prob_rate = pair_prob_rate_from_table(chi_gamma[ip], r1) * dtau
+        if r2 < prob_rate:
+            delta[ip] = r1
             event[ip] = True
 
     return event, delta

@@ -64,10 +64,11 @@ def delta_from_chi_delta_table(chi_e):
 Rejection_sampling
 '''
 @njit
-def prob_rate_from_table(chi_e, delta):
+def photon_prob_rate_from_table(chi_e, delta):
+    chi_gamma = delta * chi_e
+    chi_ep = chi_e - chi_gamma
+    z = (chi_gamma/chi_e/chi_ep)**(2/3)
     factor = -alpha*m_e*c**2/hbar
-    z = (delta/(1-delta)/chi_e)**(2/3)
-    g = 1 + delta**2/2/(1-delta)
 
     if z < _z_range[0]:
         raise ValueError('z < 0')
@@ -78,13 +79,39 @@ def prob_rate_from_table(chi_e, delta):
     # linear interp
     z_left = _z_range[0] + idx * _z_delta
 
-    k = (_int_Ai_table[idx+1] - _int_Ai_table[idx]) / _chi_delta
+    k = (_int_Ai_table[idx+1] - _int_Ai_table[idx]) / _z_delta
     int_Ai_ = _int_Ai_table[idx] + k * (z - z_left)
 
-    k = (_Aip_table[idx+1] - _Aip_table[idx]) / _chi_delta
+    k = (_Aip_table[idx+1] - _Aip_table[idx]) / _z_delta
     Aip_ = _Aip_table[idx] + k * (z - z_left)
     
-    return factor*(int_Ai_ + g*2/z * Aip_)
+    return factor*(int_Ai_ + (2.0/z + chi_gamma*np.sqrt(z)) * Aip_)
+
+
+@njit
+def pair_prob_rate_from_table(chi_gamma, delta):
+    chi_e = delta * chi_gamma
+    chi_ep = chi_gamma - chi_e
+    z = (chi_gamma/chi_e/chi_ep)**(2/3)
+    factor = alpha*m_e*c**2/hbar
+
+    if z < _z_range[0]:
+        raise ValueError('z < 0')
+    if z > _z_range[1]:
+        return 0.0
+    if _z_range[0] <= z <= _z_range[1]:
+        idx = math.floor((z - _z_range[0]) / _z_delta)
+    # linear interp
+    z_left = _z_range[0] + idx * _z_delta
+
+    k = (_int_Ai_table[idx+1] - _int_Ai_table[idx]) / _z_delta
+    int_Ai_ = _int_Ai_table[idx] + k * (z - z_left)
+
+    k = (_Aip_table[idx+1] - _Aip_table[idx]) / _z_delta
+    Aip_ = _Aip_table[idx] + k * (z - z_left)
+    
+    # - for pair
+    return factor*(int_Ai_ + (2.0/z - chi_gamma*np.sqrt(z)) * Aip_)
 
 def Ai(z):
     return airy(z)[0]

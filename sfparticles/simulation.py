@@ -24,7 +24,7 @@ def simulate(
     *all_particles : Particles,
     step: int,
     dt: float,
-    fields : Fields = None,
+    fields : Fields,
 ):
 
     t = 0.0
@@ -33,8 +33,7 @@ def simulate(
     for istep in range(step):
         # push particles
         for particles in all_particles:
-            if fields:
-                particles._eval_field(fields, t)
+            particles._eval_field(fields, t)
 
             particles._push_position(0.5*dt)
             particles._push_momentum(dt)
@@ -42,12 +41,19 @@ def simulate(
 
         # QED
         for particles in all_particles:
+            particles._eval_field(fields, t)
             particles._calculate_chi()
-            if particles.photon:
-                particles._radiate_photons(dt)
-            if particles.pair:
+
+            if hasattr(particles, 'pair'):
                 particles._create_pair(dt)
+            if hasattr(particles, 'photon'):
+                particles._radiate_photons(dt)
+        
+            
         t += dt*istep
 
     toc = perf_counter_ns()
-    print(f'{(toc - tic)/all_particles[0].N/step:.2f} ns/step/particle')
+    print(f'{(toc - tic)/all_particles[0].N_buffered/step:.2f} ns/step/particle')
+
+    for particles in all_particles:
+        particles._prune()
