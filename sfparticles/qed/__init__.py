@@ -9,9 +9,6 @@ Optical depth
 '''
 from .tables import integ_prob_rate_from_table, delta_from_chi_delta_table
 
-
-
-
 @njit(parallel=True, cache=True)
 def update_optical_depth(optical_depth, inv_gamma, chi_e, dt, N):
     event = full(N, False)
@@ -33,14 +30,12 @@ Rejection_sampling
 '''
 from .tables import prob_rate_from_table
 
-
 @njit(parallel=True, cache=True)
 def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N):
     event = full(N, False)
     delta = zeros(N)
     for ip in prange(N):
-        r1 = random.rand()
-        r2 = random.rand()
+        r1, r2 = random.rand(2)
         dtau = dt * inv_gamma[ip]
 
         # modified event generator by Gonoskov 2015

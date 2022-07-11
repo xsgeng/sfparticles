@@ -167,8 +167,8 @@ class Particles(object):
 
 
     def _radiate_photons(self, dt):
-        # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.N)
-        event, photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N)
+        # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size)
+        event, photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size)
 
         if self.photon:
             photon_props = (
