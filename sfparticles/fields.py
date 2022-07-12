@@ -40,7 +40,8 @@ class Fields(object):
 # def check_field_function():
 #     pass
 
-def simple_laser_pulse(a0, w0, ctau, x0=0, wavelength=0.8e-6, pol_angle=0, cep=0):
+def simple_laser_pulse(a0, w0, ctau, direction=1,  x0=0, wavelength=0.8e-6, pol_angle=0, cep=0):
+    assert direction == 1 or direction == -1, "direction must be +1 (+x) or -1 (-x)"
 
     omega0 = 2*pi*c / wavelength
     k0 = omega0 / c
@@ -50,16 +51,16 @@ def simple_laser_pulse(a0, w0, ctau, x0=0, wavelength=0.8e-6, pol_angle=0, cep=0
     @njit
     def _laser_pulse(x, y, z, t):
         r2 = y**2 + z**2
-        phi = k0*(x-x0) - omega0*t + cep
+        phi = k0*(x-x0 - direction*c*t)
 
-        E = E0 * np.sin(phi) * np.exp(-r2/w0**2) * np.exp(-phi**2 / (k0*ctau)**2)
+        E = E0 * np.cos(phi + cep) * np.exp(-r2/w0**2) * np.exp(-phi**2 / (k0*ctau)**2)
         Ex = 0.0
         Ey = E * np.cos(pol_angle)
         Ez = E * np.sin(pol_angle)
         
         Bx = 0.0
-        By = -Ez / c
-        Bz = Ey / c
+        By = -Ez / c * direction
+        Bz = Ey / c * direction
 
         return (Ex, Ey, Ez, Bx, By, Bz)
 
