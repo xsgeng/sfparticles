@@ -49,8 +49,7 @@ def simulate(
             if hasattr(particles, 'photon'):
                 particles._radiate_photons(dt)
         
-            
-        t += dt*istep
+        t += dt
 
     toc = perf_counter_ns()
     print(f'{(toc - tic)/all_particles[0].N_buffered/step:.2f} ns/step/particle')

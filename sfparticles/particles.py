@@ -185,7 +185,8 @@ class Particles(object):
         event, photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
         hard_photon = (photon_delta * 1 / self.inv_gamma) > 2
         photon_event = event & hard_photon & ~self._to_be_pruned
-        if hasattr(self, 'photon'):
+        
+        if hasattr(self, 'photon') and photon_event.any():
             photon_props = (
                 self.x[photon_event],
                 self.y[photon_event],
@@ -204,7 +205,7 @@ class Particles(object):
     def _create_pair(self, dt):
         
         event, pair_delta = pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
-        if hasattr(self, 'pair'):
+        if hasattr(self, 'pair') and event.any():
             electron_props = (
                 self.x[event],
                 self.y[event],
