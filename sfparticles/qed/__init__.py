@@ -37,7 +37,7 @@ def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned):
     event = full(N, False)
     delta = zeros(N)
     for ip in prange(N):
-        if to_be_pruned[ip]:
+        if to_be_pruned[ip] or chi_e[ip] == 0.0:
             continue
         r1, r2 = random.rand(2)
         dtau = dt * inv_gamma[ip]
@@ -55,7 +55,7 @@ def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned):
     event = full(N, False)
     delta = zeros(N)
     for ip in prange(N):
-        if to_be_pruned[ip]:
+        if to_be_pruned[ip] or chi_gamma[ip] == 0.0:
             continue
         r1, r2 = random.rand(2)
         dtau = dt * inv_gamma[ip]
