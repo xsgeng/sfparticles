@@ -2,7 +2,7 @@ from time import perf_counter_ns
 from typing import Callable, List
 
 from .fields import Fields
-from .particles import Particles
+from .particles import Particles, c
 
 from numba import njit, prange, get_num_threads
 
@@ -29,7 +29,6 @@ def simulate(
 
     t = 0.0
     tic = perf_counter_ns()
-
     for istep in range(step):
         # push particles
         for particles in all_particles:
@@ -41,7 +40,6 @@ def simulate(
 
         # QED
         for particles in all_particles:
-            particles._eval_field(fields, t)
             particles._calculate_chi()
 
             if hasattr(particles, 'pair'):
@@ -58,9 +56,15 @@ def simulate(
                 particles._create_pair()
         
         t += dt
-
-    toc = perf_counter_ns()
-    print(f'{(toc - tic)/all_particles[0].N_buffered/step:.2f} ns/step/particle')
+        if (istep+1) % 100 == 0 :
+            toc = perf_counter_ns()
+            Ntotal = sum([particles.Npart for particles in all_particles])
+            print(
+                f'step: {istep+1}, c*time: {c*t/1e-6:.2f} um, ',
+                ', '.join([f"{particles.Npart} {particles.name}" for particles in all_particles]),
+                f', {(toc-tic)/100/Ntotal:.2f} ns/particle'
+            )
+            tic = perf_counter_ns()
 
     for particles in all_particles:
         particles._prune()
