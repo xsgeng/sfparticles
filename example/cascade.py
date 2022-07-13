@@ -5,7 +5,7 @@ import numpy as np
 from scipy.constants import pi, m_e, e, c
 from sfparticles.fields import simple_laser_pulse
 
-from sfparticles.simulation import simulate
+from sfparticles import Simulation
 
 um = 1e-6
 fs = 1e-15
@@ -49,8 +49,8 @@ photons.set_pair((electrons, positrons))
 electrons.set_photon(photons)
 positrons.set_photon(photons)
 
-simulate(electrons, positrons, photons, step=step, dt=dt, fields=laser)
-
+sim = Simulation(electrons, positrons, photons, dt=dt, fields=laser)
+sim.start(step)
 print(positrons.Npart)
 
 fig, ax = plt.subplots()

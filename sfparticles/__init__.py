@@ -1,4 +1,5 @@
 from .particles import Particles
-from .simulation import simulate
+from .simulation import Simulation
+from .fields import Fields
 
-__all__ = ["Particles", "simulate"]
+__all__ = ["Particles", "Simulation", "Fields"]
