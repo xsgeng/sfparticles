@@ -129,6 +129,7 @@ class Particles(object):
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
         self.photon = photon
         self.event = np.full(self.buffer_size, False)
+        self.event_index = np.zeros(self.buffer_size, dtype=int)
         self.photon_delta = np.full(self.buffer_size, 0.0)
         
         
@@ -141,6 +142,7 @@ class Particles(object):
         assert pair[1].m == m_e and pair[1].q ==  e, 'second of the pair must be positron'
         self.pair = pair
         self.event = np.full(self.buffer_size, False)
+        self.event_index = np.zeros(self.buffer_size, dtype=int)
         self.pair_delta = np.full(self.buffer_size, 0.0)
 
         
@@ -204,72 +206,81 @@ class Particles(object):
         return self.event, self.pair_delta
     
     def _create_photon(self):
-        event = self.event
-        if not event.any():
+        if not self.event.any():
             return
-        photon_delta = self.photon_delta
-        hard_photon = (photon_delta * self.gamma) > 2
-        photon_event = event & hard_photon & ~self._to_be_pruned
-        
-        if hasattr(self, 'photon') and photon_event.any():
-            photon_props = (
-                self.x[photon_event],
-                self.y[photon_event],
-                self.z[photon_event],
-                self.ux[photon_event] * photon_delta[photon_event],
-                self.uy[photon_event] * photon_delta[photon_event],
-                self.uz[photon_event] * photon_delta[photon_event],
-            )
-            self.photon._append(photon_props, photon_event.sum())
 
+        pick_hard_photon(self.event, self.photon_delta, self.inv_gamma, 2.0, self.N_buffered)
+        
+        # events are already false when marked as pruned in QED
+        N_photon = self.event.sum()
+        
+        if hasattr(self, 'photon') and N_photon > 0:
+            find_event_index(self.event, self.event_index, self.buffer_size)
+            pho = self.photon
+            pho._extend(N_photon)
+            create_photon(
+                self.x, self.y, self.z, self.ux, self.uy, self.uz,
+                pho.x, pho.y, pho.z, pho.ux, pho.uy, pho.uz,
+                pho.inv_gamma, pho._to_be_pruned,
+                self.event_index, self.photon_delta, pho.N_buffered, N_photon,
+            )
+            
+            pho.N_buffered += N_photon
         
 
     def _create_pair(self):
-        event = self.event
-        if not event.any():
+        if not self.event.any():
             return
-        pair_delta = self.pair_delta
-        if hasattr(self, 'pair') and event.any():
-            electron_props = (
-                self.x[event],
-                self.y[event],
-                self.z[event],
-                self.ux[event] * pair_delta[event],
-                self.uy[event] * pair_delta[event],
-                self.uz[event] * pair_delta[event],
+        
+        # events are already false when marked as pruned in QED
+        N_pair = self.event.sum()
+        
+        if hasattr(self, 'pair'):
+            find_event_index(self.event, self.event_index, self.buffer_size)
+            ele = self.pair[0]
+            pos = self.pair[1]
+            ele._extend(N_pair)
+            pos._extend(N_pair)
+            
+            create_pair(
+                self.x, self.y, self.z, self.ux, self.uy, self.uz,
+                self._to_be_pruned,
+                ele.x, ele.y, ele.z, ele.ux, ele.uy, ele.uz,
+                ele.inv_gamma, ele._to_be_pruned,
+                self.event_index, self.pair_delta, ele.N_buffered, N_pair,
             )
-            positron_props = (
-                self.x[event],
-                self.y[event],
-                self.z[event],
-                self.ux[event] * (1-pair_delta[event]),
-                self.uy[event] * (1-pair_delta[event]),
-                self.uz[event] * (1-pair_delta[event]),
+            create_pair(
+                self.x, self.y, self.z, self.ux, self.uy, self.uz,
+                self._to_be_pruned,
+                pos.x, pos.y, pos.z, pos.ux, pos.uy, pos.uz,
+                pos.inv_gamma, pos._to_be_pruned,
+                self.event_index, self.pair_delta, pos.N_buffered, N_pair,
+                inverse_delta=True,
             )
-            self.pair[0]._append(electron_props, event.sum())
-            self.pair[1]._append(positron_props, event.sum())
-
-        # mark photon as deleted
-        self._to_be_pruned[event] = True
-
+            
+            ele.N_buffered += N_pair
+            pos.N_buffered += N_pair
+            
 
 
-    def _append(self, props, N_new):
+    def _extend(self, N_new):
         # extend buffer
         if (self.buffer_size - self.N_buffered) < N_new:
-            append_buffer = np.zeros(self.N_buffered + N_new)
+            bufer_size_new = self.N_buffered + N_new
+            append_buffer = np.zeros(bufer_size_new)
             for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth'):
                 # self.* = np.concatenate((self.*, append_buffer))
                 setattr(self, attr, np.concatenate((getattr(self, attr), append_buffer)))
 
             if hasattr(self, 'event'):
-                self.event = np.concatenate((self.event, np.full(self.N_buffered + N_new, False)))
+                self.event = np.concatenate((self.event, np.full(bufer_size_new, False)))
+                self.event_index = np.concatenate((self.event_index, np.zeros(bufer_size_new, dtype=int)))
             if hasattr(self, 'photon_delta'):
                 self.photon_delta = np.concatenate((self.photon_delta, append_buffer))
             if hasattr(self, 'pair_delta'):
                 self.pair_delta = np.concatenate((self.pair_delta, append_buffer))
 
-            self._to_be_pruned = np.concatenate((self._to_be_pruned, np.full(self.N_buffered + N_new, True)))
+            self._to_be_pruned = np.concatenate((self._to_be_pruned, np.full(bufer_size_new, True)))
 
             if self.has_spin:
                 self.sx = np.concatenate((self.sx, append_buffer))
@@ -277,27 +288,8 @@ class Particles(object):
                 self.sz = np.concatenate((self.sz, append_buffer))
 
             # new buffer size
-            self.buffer_size += self.N_buffered + N_new
-
-        # update r and u
-        for i, attr in enumerate(('x', 'y', 'z', 'ux', 'uy', 'uz')):
-            getattr(self, attr)[self.N_buffered:self.N_buffered+N_new] = props[i]
-
-        # update inv_gamma
-        if self.m > 0:
-            inv_gamma = 1 / np.sqrt(1 + props[3]**2 + props[4]**2 + props[5]**2)
-        if self.m == 0:
-            inv_gamma = 1 / np.sqrt(props[3]**2 + props[4]**2 + props[5]**2)
-        self.inv_gamma[self.N_buffered:self.N_buffered+N_new] = inv_gamma
-
-        # spin
-        if self.has_spin:
-            self.ux[self.N_buffered:self.N_buffered+N_new] = props[6]
-            self.uy[self.N_buffered:self.N_buffered+N_new] = props[7]
-            self.uz[self.N_buffered:self.N_buffered+N_new] = props[8]
-
-        self._to_be_pruned[self.N_buffered:self.N_buffered+N_new] = False
-        self.N_buffered += N_new
+            self.buffer_size += bufer_size_new
+            
 
     def _prune(self):
         selected = ~self._to_be_pruned
@@ -484,6 +476,70 @@ def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_prun
 def create_photon(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,
     x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
-    event, photon_delta, to_be_pruned, N
+    inv_gamma_dst, photon_to_be_pruned,
+    event_index, photon_delta, N_buffered, N_photon,
 ):
-    pass
+    for ip in prange(N_photon):
+        idx_src = event_index[ip]
+        idx_dst = N_buffered+ip
+        x_dst[idx_dst] = x_src[idx_src]
+        y_dst[idx_dst] = y_src[idx_src]
+        z_dst[idx_dst] = z_src[idx_src]
+        
+        ux_dst[idx_dst] = photon_delta[idx_src] * ux_src[idx_src]
+        uy_dst[idx_dst] = photon_delta[idx_src] * uy_src[idx_src]
+        uz_dst[idx_dst] = photon_delta[idx_src] * uz_src[idx_src]
+        
+        inv_gamma_dst[idx_dst] = 1.0 / np.sqrt(ux_dst[idx_dst]**2 + uy_dst[idx_dst]**2 + uz_dst[idx_dst]**2)
+        # mark created photon as existing
+        photon_to_be_pruned[idx_dst] = False
+        
+        
+@njit(parallel=True, cache=False)
+def create_pair(
+    x_src, y_src, z_src, ux_src, uy_src, uz_src,
+    photon_to_be_pruned,
+    x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+    inv_gamma_dst, pair_to_be_pruned,
+    event_index, pair_delta, N_buffered, N_pair,
+    inverse_delta = False,
+):
+    for ip in prange(N_pair):
+        idx_src = event_index[ip]
+        idx_dst = N_buffered+ip
+        x_dst[idx_dst] = x_src[idx_src]
+        y_dst[idx_dst] = y_src[idx_src]
+        z_dst[idx_dst] = z_src[idx_src]
+        
+        delta = pair_delta[idx_src]
+        if inverse_delta: 
+            delta = 1.0 - delta
+        
+        ux_dst[idx_dst] = delta * ux_src[idx_src]
+        uy_dst[idx_dst] = delta * uy_src[idx_src]
+        uz_dst[idx_dst] = delta * uz_src[idx_src]
+        
+        # TODO spin
+        
+        inv_gamma_dst[idx_dst] = 1.0 / np.sqrt(1.0 + ux_dst[idx_dst]**2 + uy_dst[idx_dst]**2 + uz_dst[idx_dst]**2)
+        # mark created pair as existing
+        pair_to_be_pruned[idx_dst] = False
+        # mark created pair as deleted
+        photon_to_be_pruned[idx_src] = True
+        
+
+@njit
+def find_event_index(event, index, N):
+    idx = 0
+    for i in range(N):
+        if event[i]:
+            index[idx] = i
+            idx += 1
+            
+
+@njit(parallel=True)
+def pick_hard_photon(event, delta, inv_gamma, threshold, N):
+    for ip in prange(N):
+        if event[ip]:
+            if delta[ip] / inv_gamma[ip] < threshold:
+                event[ip] = False
