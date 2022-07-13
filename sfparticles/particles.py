@@ -115,6 +115,13 @@ class Particles(object):
         # prune flag
         self._to_be_pruned = np.full(N, False)
 
+    @property
+    def Npart(self):
+        return (~self._to_be_pruned).sum()
+
+    @property
+    def gamma(self):
+        return 1.0 / self.inv_gamma
 
     def set_photon(self, photon):
         assert self.m > 0, 'photon cannot radiate photon'
@@ -180,10 +187,23 @@ class Particles(object):
 
 
 
-    def _radiate_photons(self, dt):
+    def _photon_event(self, dt):
         # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
-        event, photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
-        hard_photon = (photon_delta * 1 / self.inv_gamma) > 2
+        self.event, self.photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
+        # RR
+        radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
+        return self.event, self.photon_delta
+
+    def _pair_event(self, dt):
+        self.event, self.pair_delta = pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
+        return self.event, self.pair_delta
+    
+    def _create_photon(self):
+        event = self.event
+        if not event.any():
+            return
+        photon_delta = self.photon_delta
+        hard_photon = (photon_delta * self.gamma) > 2
         photon_event = event & hard_photon & ~self._to_be_pruned
         
         if hasattr(self, 'photon') and photon_event.any():
@@ -197,14 +217,13 @@ class Particles(object):
             )
             self.photon._append(photon_props, photon_event.sum())
 
-        # RR
-        radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, event, photon_delta, self.N_buffered, self._to_be_pruned)
+        
 
-        return event, photon_delta
-        
-    def _create_pair(self, dt):
-        
-        event, pair_delta = pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
+    def _create_pair(self):
+        event = self.event
+        if not event.any():
+            return
+        pair_delta = self.pair_delta
         if hasattr(self, 'pair') and event.any():
             electron_props = (
                 self.x[event],
@@ -228,7 +247,6 @@ class Particles(object):
         # mark photon as deleted
         self._to_be_pruned[event] = True
 
-        return event, pair_delta
 
 
     def _append(self, props, N_new):
@@ -238,6 +256,13 @@ class Particles(object):
             for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth'):
                 # self.* = np.concatenate((self.*, append_buffer))
                 setattr(self, attr, np.concatenate((getattr(self, attr), append_buffer)))
+
+            if hasattr(self, 'event'):
+                self.event = np.concatenate((self.event, np.full(self.N_buffered + N_new, False)))
+            if hasattr(self, 'photon_delta'):
+                self.photon_delta = np.concatenate((self.photon_delta, append_buffer))
+            if hasattr(self, 'pair_delta'):
+                self.pair_delta = np.concatenate((self.pair_delta, append_buffer))
 
             self._to_be_pruned = np.concatenate((self._to_be_pruned, np.full(self.N_buffered + N_new, True)))
 
@@ -449,3 +474,11 @@ def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_prun
             uz[ip] *= 1 - photon_delta[ip]
             inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
         
+
+@njit(parallel=True, cache=False)
+def create_photon(
+    x_src, y_src, z_src, ux_src, uy_src, uz_src,
+    x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+    event, photon_delta, to_be_pruned, N
+):
+    pass

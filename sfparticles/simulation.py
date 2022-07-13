@@ -45,9 +45,17 @@ def simulate(
             particles._calculate_chi()
 
             if hasattr(particles, 'pair'):
-                particles._create_pair(dt)
+                particles._pair_event(dt)
             if hasattr(particles, 'photon'):
-                particles._radiate_photons(dt)
+                particles._photon_event(dt)
+        # create particles
+        # seperated from events generation
+        # since particles created in the current loop do NOT further create particle
+        for particles in all_particles:
+            if hasattr(particles, 'photon_delta'):
+                particles._create_photon()
+            if hasattr(particles, 'pair_delta'):
+                particles._create_pair()
         
         t += dt
 

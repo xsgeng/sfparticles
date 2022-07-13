@@ -64,7 +64,7 @@ class TestPhotonNumber(unittest.TestCase):
                 p._eval_field(Bfield, 0)
                 p._calculate_chi()
 
-                event, _ = p._radiate_photons(interval)
+                event, _ = p._photon_event(interval)
                 n_photon = event.sum()/N
                 
                 P = photon_prob_rate_delta(chi_e)
@@ -96,13 +96,12 @@ class TestPhotonNumber(unittest.TestCase):
                 p._eval_field(Bfield, 0)
                 p._calculate_chi()
 
-                event, _ = p._create_pair(interval)
+                event, _ = p._pair_event(interval)
                 n_pair = event.sum()/N
                 
                 P = pair_prob_rate_delta(chi_gamma)
                 prob_rate_total, err = quad(P, 0, 1)
                 n_pair_expected = prob_rate_total * tau
 
-                print(n_pair, n_pair_expected)
 
                 self.assertLess(abs(n_pair-n_pair_expected)/n_pair_expected, tor, f'n_pair={n_pair}, n_pair_expected={n_pair_expected}')
