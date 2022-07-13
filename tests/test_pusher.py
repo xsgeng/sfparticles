@@ -27,9 +27,11 @@ class TestPusher(unittest.TestCase):
         By = np.asarray([0], dtype=float)
         Bz = np.asarray([bz], dtype=float)
 
+        to_be_pruned = np.array([False])
+
         nt = 20
         for _ in range(nt):
-            boris(ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, -e, 1, T/nt)
+            boris(ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, -e, 1, to_be_pruned, T/nt)
         
         self.assertLess(np.abs(np.sqrt(ux**2 + uy**2 + uz**2) - u0)/u0, 1E-10)
 
@@ -56,8 +58,10 @@ class TestPusher(unittest.TestCase):
         By = np.asarray([0], dtype=float)
         Bz = np.asarray([bz], dtype=float)
 
+        to_be_pruned = np.array([False])
+
         nt = 20
         for _ in range(nt):
-            vay(ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, -e, 1, T/nt)
+            vay(ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, -e, 1, to_be_pruned, T/nt)
 
         self.assertLess(np.abs(np.sqrt(ux**2 + uy**2 + uz**2) - u0)/u0, 1E-10)
