@@ -36,6 +36,7 @@ from .tables import photon_prob_rate_from_table, pair_prob_rate_from_table
 def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_e[ip] == 0.0:
+            event[ip] = False
             continue
         r1, r2 = random.rand(2)
         dtau = dt * inv_gamma[ip]
@@ -56,6 +57,7 @@ def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event,
 def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_gamma[ip] == 0.0:
+            event[ip] = False
             continue
         r1, r2 = random.rand(2)
         dtau = dt * inv_gamma[ip]
