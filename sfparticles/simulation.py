@@ -27,10 +27,11 @@ class Simulation(object):
             for particles in self.all_particles:
                 particles._eval_field(self.fields, self.t)
 
-                particles._push_position(0.5*self.dt)
+                # from t = (i-0.5)*dt to t = (i+0.5)*dt
                 particles._push_momentum(self.dt)
+                # from t = i*dt       to t = (i+0.5)*dt
                 particles._push_position(0.5*self.dt)
-
+                
             # QED
             for particles in self.all_particles:
                 particles._calculate_chi()
@@ -39,7 +40,7 @@ class Simulation(object):
                     particles._pair_event(self.dt)
                 if hasattr(particles, 'photon'):
                     particles._photon_event(self.dt)
-                    
+
             # create particles
             # seperated from events generation
             # since particles created in the current loop do NOT further create particle
@@ -48,6 +49,11 @@ class Simulation(object):
                     particles._create_photon()
                 if hasattr(particles, 'pair_delta'):
                     particles._create_pair()
+
+            for particles in self.all_particles:
+                # from t = (i+0.5)*dt to t = (i+1)*dt
+                particles._push_position(0.5*self.dt)
+            
             
             self.t += self.dt
             if (istep+1) % self.print_every == 0 :
