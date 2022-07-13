@@ -61,9 +61,14 @@ class TestPhotonNumber(unittest.TestCase):
         for chi_e in [0.1, 0.5, 1.0, 2.0, 5.0]:
             with self.subTest(chi_e=chi_e):
                 Bfield = Bfield_from_chi(chi_e)
+                
+                pho = Particles('pho', 0, 0)
+                p.set_photon(pho)
+                
                 p._eval_field(Bfield, 0)
                 p._calculate_chi()
-
+                
+                
                 event, _ = p._photon_event(interval)
                 n_photon = event.sum()/N
                 
@@ -93,9 +98,16 @@ class TestPhotonNumber(unittest.TestCase):
         for chi_gamma in [1.0, 2.0, 5.0]:
             with self.subTest(chi_gamma=chi_gamma):
                 Bfield = Bfield_from_chi(chi_gamma)
+                
+                ele = Particles('ele', -1, 1)
+                pos = Particles('pos', 1, 1)
+                p.set_pair((ele, pos))
+                
                 p._eval_field(Bfield, 0)
                 p._calculate_chi()
-
+                
+                
+                
                 event, _ = p._pair_event(interval)
                 n_pair = event.sum()/N
                 
