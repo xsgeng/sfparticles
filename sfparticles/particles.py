@@ -128,7 +128,10 @@ class Particles(object):
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
         self.photon = photon
-
+        self.event = np.full(self.buffer_size, False)
+        self.photon_delta = np.full(self.buffer_size, 0.0)
+        
+        
     def set_pair(self, pair):
         assert self.m == 0, 'massive particle cannot create BW pair'
         assert isinstance(pair, (tuple, list)), 'pair must be tuple or list'
@@ -137,6 +140,8 @@ class Particles(object):
         assert pair[0].m == m_e and pair[0].q == -e, 'first of the pair must be electron'
         assert pair[1].m == m_e and pair[1].q ==  e, 'second of the pair must be positron'
         self.pair = pair
+        self.event = np.full(self.buffer_size, False)
+        self.pair_delta = np.full(self.buffer_size, 0.0)
 
         
     def _push_momentum(self, dt):
@@ -189,13 +194,13 @@ class Particles(object):
 
     def _photon_event(self, dt):
         # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
-        self.event, self.photon_delta = photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
+        photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.photon_delta )
         # RR
         radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
         return self.event, self.photon_delta
 
     def _pair_event(self, dt):
-        self.event, self.pair_delta = pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned )
+        pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.pair_delta )
         return self.event, self.pair_delta
     
     def _create_photon(self):

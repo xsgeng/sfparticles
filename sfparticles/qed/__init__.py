@@ -33,9 +33,7 @@ Rejection_sampling
 from .tables import photon_prob_rate_from_table, pair_prob_rate_from_table
 
 @njit(parallel=True, cache=False)
-def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned):
-    event = full(N, False)
-    delta = zeros(N)
+def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_e[ip] == 0.0:
             continue
@@ -47,13 +45,15 @@ def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned):
         if r2 < prob_rate:
             delta[ip] = r1**3
             event[ip] = True
+        else:
+            delta[ip] = 0.0
+            event[ip] = False
+            
 
     return event, delta
 
 @njit(parallel=True, cache=False)
-def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned):
-    event = full(N, False)
-    delta = zeros(N)
+def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_gamma[ip] == 0.0:
             continue
@@ -64,5 +64,8 @@ def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned):
         if r2 < prob_rate:
             delta[ip] = r1
             event[ip] = True
+        else:
+            delta[ip] = 0.0
+            event[ip] = False
 
     return event, delta
