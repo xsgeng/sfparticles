@@ -65,9 +65,10 @@ class Simulation(object):
 
                 Ntotal = sum([particles.Npart for particles in self.all_particles])
                 print(
-                    f'step: {istep+1}, ct: {c*self.t/1e-6:.2f} um, ',
-                    ', '.join([f"{particles.Npart} {particles.name}" for particles in self.all_particles]),
-                    f', {elapsed/self.print_every/Ntotal:.2f} ns/particle'
+                    f'step: {istep+1}\tct: {c*self.t/1e-6:.2f} um\t',
+                    '\t'.join([f"{particles.Npart} {particles.name}" for particles in self.all_particles]),
+                    f'\t{elapsed/self.print_every/Ntotal:.2f} ns/particle',
+                    f'\t{elapsed/1E9:.2f} s'
                 )
 
         for particles in self.all_particles:
