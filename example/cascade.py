@@ -16,7 +16,7 @@ k0 = omega0 / c
 
 a0 = 1000.0
 w0 = 5*um
-ctau = 10*um
+ctau = 5*um
 
 a0_norm = e / (m_e * c * omega0)
 
@@ -24,8 +24,7 @@ N = int(1)
 Tsim = 6*ctau/c
 dt = 1*um / c / 100
 step = int(Tsim / dt)
-
-gen = np.random.RandomState(0)
+gen = np.random.RandomState(42)
 def init(N):
     x = gen.randn(N) * 0.1*um
     y = gen.randn(N) * 0.1*um
@@ -49,7 +48,7 @@ photons.set_pair((electrons, positrons))
 electrons.set_photon(photons)
 positrons.set_photon(photons)
 
-sim = Simulation(electrons, positrons, photons, dt=dt, fields=laser)
+sim = Simulation(electrons, positrons, photons, dt=dt, fields=laser, print_every=None)
 sim.start(step)
 print(positrons.Npart)
 

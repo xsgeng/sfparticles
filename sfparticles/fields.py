@@ -10,10 +10,10 @@ class Fields(object):
         if isinstance(field_func, CPUDispatcher):
             field_func_numba = field_func
         else:
-            field_func_numba = njit(field_func, cache=False)
+            field_func_numba = njit(field_func, cache=True)
 
         self.field_func_numba = field_func_numba
-        @njit(parallel=True, cache=False)
+        @njit(parallel=True, cache=True)
         def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
             for ip in prange(N):
                 if to_be_pruned[ip]:

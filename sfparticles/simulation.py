@@ -56,6 +56,8 @@ class Simulation(object):
             
             
             self.t += self.dt
+            if self.print_every is None:
+                continue
             if (istep+1) % self.print_every == 0 :
                 elapsed = perf_counter_ns() - self.tic
                 self.tic = perf_counter_ns()

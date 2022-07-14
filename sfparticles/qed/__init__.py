@@ -9,7 +9,7 @@ Optical depth
 '''
 from .tables import integ_prob_rate_from_table, delta_from_chi_delta_table
 
-@njit(parallel=True, cache=False)
+@njit(parallel=True, cache=True)
 def update_optical_depth(optical_depth, inv_gamma, chi_e, dt, N, to_be_pruned):
     event = full(N, False)
     delta = zeros(N)
@@ -32,7 +32,7 @@ Rejection_sampling
 '''
 from .tables import photon_prob_rate_from_table, pair_prob_rate_from_table
 
-@njit(parallel=True, cache=False)
+@njit(parallel=True, cache=True)
 def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_e[ip] == 0.0:
@@ -53,7 +53,7 @@ def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event,
 
     return event, delta
 
-@njit(parallel=True, cache=False)
+@njit(parallel=True, cache=True)
 def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_gamma[ip] == 0.0:
