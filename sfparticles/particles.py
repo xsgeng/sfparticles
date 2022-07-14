@@ -196,13 +196,14 @@ class Particles(object):
 
     def _photon_event(self, dt):
         # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
-        photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.photon_delta )
+        photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
         # RR
         radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
         return self.event, self.photon_delta
 
+    
     def _pair_event(self, dt):
-        pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.pair_delta )
+        pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta )
         return self.event, self.pair_delta
     
     def _create_photon(self):
@@ -215,7 +216,7 @@ class Particles(object):
         N_photon = self.event.sum()
         
         if hasattr(self, 'photon') and N_photon > 0:
-            find_event_index(self.event, self.event_index, self.buffer_size)
+            find_event_index(self.event, self.event_index, self.N_buffered)
             pho = self.photon
             pho._extend(N_photon)
             create_photon(
@@ -236,7 +237,7 @@ class Particles(object):
         N_pair = self.event.sum()
         
         if hasattr(self, 'pair'):
-            find_event_index(self.event, self.event_index, self.buffer_size)
+            find_event_index(self.event, self.event_index, self.N_buffered)
             ele = self.pair[0]
             pos = self.pair[1]
             ele._extend(N_pair)
