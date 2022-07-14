@@ -58,33 +58,29 @@ class TestParticlesInit(unittest.TestCase):
 
 
 class TestParticleResize(unittest.TestCase):
-    def test_append(self):
+    def test_extend(self):
         N = 5
         N_new1 = 10
         N_new2 = 30
-        p = Particles('e', 1, 1, 5, has_spin=True)
+        e = Particles('e', -1, 1, N, has_spin=True)
+        pho = Particles('pho', 0, 0)
+        e.set_photon(pho)
 
-        p._append(([1]*N_new1)*6, N_new1)
-        self.assertEqual(p.N_buffered, N + N_new1)
-        self.assertEqual(p.buffer_size, 2*N + N_new1)
-        self.assertEqual(p.x.shape[0], p.buffer_size)
+        e._extend(N_new1)
+        self.assertEqual(e.N_buffered, N)
+        self.assertEqual(e.buffer_size, 2*N + N_new1)
+        self.assertEqual(e.x.shape[0], e.buffer_size)
 
-        p._append(([2]*N_new2)*6, N_new2)
-        self.assertEqual(p.N_buffered, N + N_new1 + N_new2)
-        self.assertEqual(p.buffer_size, (2*N + N_new1) + N_new2 + (N + N_new1))
+        e._extend(N_new2)
+        self.assertEqual(e.N_buffered, N)
+        self.assertEqual(e.buffer_size, (2*N + N_new1) + N + N_new2 )
 
 
-        attrs = [prop + i for prop, i in product(['', 'u', 'E', 'B'], ['x', 'y', 'z'])] + \
-            ['inv_gamma', 'optical_depth']
+        attrs = [prop + i for prop, i in product(['', 'u', 's', 'E', 'B'], ['x', 'y', 'z'])] + \
+            ['inv_gamma', 'optical_depth', '_to_be_pruned', 'event', 'photon_delta', 'event_index']
         for attr in attrs:
             with self.subTest(attr):
-                self.assertEqual(len(getattr(p, attr)), p.buffer_size)
-
-        attrs = [prop + i for prop, i in product(['', 'u'], ['x', 'y', 'z'])] 
-        for attr in attrs:
-            with self.subTest(attr):
-                self.assertEqual(getattr(p, attr)[N:N+N_new1].tolist(), [1]*N_new1)
-                self.assertEqual(getattr(p, attr)[N+N_new1:N+N_new1+N_new2].tolist(), [2]*N_new2)
+                self.assertEqual(len(getattr(e, attr)), e.buffer_size)
 
 
         
