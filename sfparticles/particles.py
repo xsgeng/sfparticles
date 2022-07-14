@@ -193,7 +193,6 @@ class Particles(object):
         )
 
 
-
     def _photon_event(self, dt):
         # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
         photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
@@ -205,13 +204,16 @@ class Particles(object):
     def _pair_event(self, dt):
         pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta )
         return self.event, self.pair_delta
+
     
+    def _pick_hard_photon(self, threshold=2.0):
+        pick_hard_photon(self.event, self.photon_delta, self.inv_gamma, threshold, self.N_buffered)
+        
+        
     def _create_photon(self):
         if not self.event.any():
             return
 
-        pick_hard_photon(self.event, self.photon_delta, self.inv_gamma, 2.0, self.N_buffered)
-        
         # events are already false when marked as pruned in QED
         N_photon = self.event.sum()
         
@@ -262,7 +264,6 @@ class Particles(object):
             ele.N_buffered += N_pair
             pos.N_buffered += N_pair
             
-
 
     def _extend(self, N_new):
         # extend buffer
@@ -461,6 +462,7 @@ def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_
             (ux[ip]*Ex[ip] + uy[ip]*Ey[ip] + uz[ip]*Ez[ip])**2
         )
 
+
 @njit(parallel=True, cache=True)
 def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
     for ip in prange(N):
@@ -495,7 +497,7 @@ def create_photon(
         # mark created photon as existing
         photon_to_be_pruned[idx_dst] = False
         
-        
+
 @njit(parallel=True, cache=True)
 def create_pair(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,

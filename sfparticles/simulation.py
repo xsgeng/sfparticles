@@ -40,6 +40,7 @@ class Simulation(object):
                     particles._pair_event(self.dt)
                 if hasattr(particles, 'photon'):
                     particles._photon_event(self.dt)
+                    particles._pick_hard_photon()
 
             # create particles
             # seperated from events generation
