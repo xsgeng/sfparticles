@@ -11,11 +11,14 @@ class Simulation(object):
         fields : Fields,
         print_every : int = 100,
         t0 = 0.0,
+        photon_threshold = 2.0
     ) -> None:
         self.all_particles = all_particles
         self.dt = dt
         self.fields = fields
         self.print_every = print_every
+        self.photon_threshold = photon_threshold
+        
         self.t = t0
         self.step = 0
 
@@ -40,7 +43,7 @@ class Simulation(object):
                     particles._pair_event(self.dt)
                 if hasattr(particles, 'photon'):
                     particles._photon_event(self.dt)
-                    particles._pick_hard_photon()
+                    particles._pick_hard_photon(self.photon_threshold)
 
             # create particles
             # seperated from events generation
