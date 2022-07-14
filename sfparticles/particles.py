@@ -185,7 +185,7 @@ class Particles(object):
 
 
     def _calculate_chi(self):
-        update_chi_e(
+        update_chi(
             self.Ex, self.Ey, self.Ez, 
             self.Bx, self.By, self.Bz, 
             self.ux, self.uy, self.uz,
@@ -449,16 +449,16 @@ def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt )
 
 
 @njit(parallel=True, cache=True)
-def update_chi_e(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
-    gamma = 1 / inv_gamma
+def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
     factor = e*hbar / (m_e**2 * c**3)
     for ip in prange(N):
         if to_be_pruned[ip]:
             continue
+        gamma = 1.0 / inv_gamma[ip]
         chi_e[ip] = factor * np.sqrt(
-            (gamma[ip]*Ex[ip] + (uy[ip]*Bz[ip] - uz[ip]*By[ip])*c)**2 +
-            (gamma[ip]*Ey[ip] + (uz[ip]*Bx[ip] - ux[ip]*Bz[ip])*c)**2 +
-            (gamma[ip]*Ez[ip] + (ux[ip]*By[ip] - uy[ip]*Bx[ip])*c)**2 -
+            (gamma*Ex[ip] + (uy[ip]*Bz[ip] - uz[ip]*By[ip])*c)**2 +
+            (gamma*Ey[ip] + (uz[ip]*Bx[ip] - ux[ip]*Bz[ip])*c)**2 +
+            (gamma*Ez[ip] + (ux[ip]*By[ip] - uy[ip]*Bx[ip])*c)**2 -
             (ux[ip]*Ex[ip] + uy[ip]*Ey[ip] + uz[ip]*Ez[ip])**2
         )
 
