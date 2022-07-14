@@ -1,4 +1,4 @@
-from numba import njit, prange
+from numba import njit, prange, void, float64, boolean, int64
 from numpy import asarray, full, full_like, log, log10, sqrt, random, zeros
 from math import floor
 from scipy.constants import alpha, pi, m_e, hbar, c
@@ -32,7 +32,7 @@ Rejection_sampling
 '''
 from .tables import photon_prob_rate_from_table, pair_prob_rate_from_table
 
-@njit(parallel=True, cache=True)
+@njit(void(float64[:], float64[:], float64, int64, boolean[:], boolean[:], float64[:]), parallel=True, cache=True)
 def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_e[ip] == 0.0:
@@ -51,9 +51,7 @@ def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event,
             event[ip] = False
             
 
-    return event, delta
-
-@njit(parallel=True, cache=True)
+@njit(void(float64[:], float64[:], float64, int64, boolean[:], boolean[:], float64[:]), parallel=True, cache=True)
 def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned, event, delta):
     for ip in prange(N):
         if to_be_pruned[ip] or chi_gamma[ip] == 0.0:
@@ -69,5 +67,3 @@ def pair_from_rejection_sampling(inv_gamma, chi_gamma, dt, N, to_be_pruned, even
         else:
             delta[ip] = 0.0
             event[ip] = False
-
-    return event, delta

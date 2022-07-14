@@ -1,7 +1,7 @@
 from typing import Tuple, Union
 import numpy as np
 from scipy.constants import c, m_e, e, hbar
-from numba import njit, prange, guvectorize
+from numba import njit, prange, guvectorize, float64, int64, void, boolean
 from .fields import Fields
 
 from .qed import photon_from_rejection_sampling, pair_from_rejection_sampling, update_optical_depth
@@ -251,6 +251,7 @@ class Particles(object):
                 ele.x, ele.y, ele.z, ele.ux, ele.uy, ele.uz,
                 ele.inv_gamma, ele._to_be_pruned,
                 self.event_index, self.pair_delta, ele.N_buffered, N_pair,
+                inverse_delta=False,
             )
             create_pair(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
@@ -302,7 +303,7 @@ class Particles(object):
         self.N_buffered = N
 
 
-@njit(parallel=True, cache=True)
+@njit(void(*[float64[:]]*7, int64, boolean[:], float64), parallel=True, cache=True)
 def push_position( x, y, z, ux, uy, uz, inv_gamma, N, to_be_pruned, dt ):
     """
     Advance the particles' positions over `dt` using the momenta `ux`, `uy`, `uz`,
@@ -319,7 +320,7 @@ def push_position( x, y, z, ux, uy, uz, inv_gamma, N, to_be_pruned, dt ):
         z[ip] += cdt * inv_gamma[ip] * uz[ip]
 
 
-@njit(parallel=True, cache=True)
+@njit(void(*[float64[:]]*10, float64, int64, boolean[:], float64), parallel=True, cache=True)
 def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
     """
     Advance the particles' momenta, using numba
@@ -448,7 +449,7 @@ def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt )
         inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
 
 
-@njit(parallel=True, cache=True)
+@njit(void(*[float64[:]]*11, int64, boolean[:]), parallel=True, cache=True)
 def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
     factor = e*hbar / (m_e**2 * c**3)
     for ip in prange(N):
@@ -463,7 +464,7 @@ def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pr
         )
 
 
-@njit(parallel=True, cache=True)
+@njit(void(*[float64[:]]*4, boolean[:], float64[:], int64, boolean[:]), parallel=True, cache=True)
 def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
     for ip in prange(N):
         if to_be_pruned[ip]:
@@ -475,7 +476,14 @@ def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_prun
             inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
         
 
-@njit(parallel=True, cache=True)
+@njit(
+    void(
+        *[float64[:]]*12, 
+        float64[:], boolean[:], 
+        int64[:], float64[:], int64, int64,
+    ), 
+    parallel=True, cache=True
+)
 def create_photon(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,
     x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
@@ -498,14 +506,24 @@ def create_photon(
         photon_to_be_pruned[idx_dst] = False
         
 
-@njit(parallel=True, cache=True)
+@njit(
+    void(
+        *[float64[:]]*6, 
+        boolean[:], 
+        *[float64[:]]*6, 
+        float64[:], boolean[:], 
+        int64[:], float64[:], int64, int64,
+        boolean,
+    ), 
+    parallel=True, cache=True
+)
 def create_pair(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,
     photon_to_be_pruned,
     x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
     inv_gamma_dst, pair_to_be_pruned,
     event_index, pair_delta, N_buffered, N_pair,
-    inverse_delta = False,
+    inverse_delta,
 ):
     for ip in prange(N_pair):
         idx_src = event_index[ip]
@@ -531,7 +549,7 @@ def create_pair(
         photon_to_be_pruned[idx_src] = True
         
 
-@njit
+@njit(void(boolean[:], int64[:], int64))
 def find_event_index(event, index, N):
     idx = 0
     for i in range(N):
@@ -540,7 +558,7 @@ def find_event_index(event, index, N):
             idx += 1
             
 
-@njit(parallel=True)
+@njit((void(boolean[:], float64[:], float64[:], float64, int64)), parallel=True)
 def pick_hard_photon(event, delta, inv_gamma, threshold, N):
     for ip in prange(N):
         if event[ip]:
