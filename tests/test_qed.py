@@ -71,9 +71,9 @@ class TestPhotonNumber(unittest.TestCase):
         ele._calculate_chi()
         
         ele._photon_event(dt)
-        ele._create_photon()
+        ele._create_photon(pho)
         ele._photon_event(dt)
-        ele._create_photon()
+        ele._create_photon(pho)
         self.assertEqual(pho.N_buffered, pho.Npart)
         
     def test_hard_photon(self):
@@ -89,7 +89,7 @@ class TestPhotonNumber(unittest.TestCase):
         
         ele._photon_event(dt)
         ele._pick_hard_photon(2.0)
-        ele._create_photon()
+        ele._create_photon(pho)
         self.assertTrue((pho.gamma > 2.0).all())
         
     def test_event_number(self):
@@ -110,7 +110,7 @@ class TestPhotonNumber(unittest.TestCase):
                 
                 
                 ele._photon_event(interval)
-                ele._create_photon()
+                ele._create_photon(pho)
                 n_photon = pho.Npart / self.N
 
                 
@@ -147,15 +147,15 @@ class TestPairNumber(unittest.TestCase):
         pho = self.pho
         ele = Particles('ele', -1, 1)
         pos = Particles('pos', 1, 1)
-        pho.set_pair((ele, pos))
+        pho.set_pair(ele, pos)
         
         pho._eval_field(Bfield, 0)
         pho._calculate_chi()
         
         pho._pair_event(dt)
-        pho._create_pair()
+        pho._create_pair(ele, pos)
         pho._pair_event(dt)
-        pho._create_pair()
+        pho._create_pair(ele, pos)
 
         self.assertEqual(pos.N_buffered, pos.Npart)
         self.assertEqual(ele.N_buffered, ele.Npart)
@@ -170,7 +170,7 @@ class TestPairNumber(unittest.TestCase):
         pho = self.pho
         ele = Particles('ele', -1, 1)
         pos = Particles('pos', 1, 1)
-        pho.set_pair((ele, pos))
+        pho.set_pair(ele, pos)
         
         pho._eval_field(Bfield, 0)
         pho._calculate_chi()
@@ -180,7 +180,7 @@ class TestPairNumber(unittest.TestCase):
         uy_pho = pho.uy[pho.event]
         uz_pho = pho.uz[pho.event]
         
-        pho._create_pair()
+        pho._create_pair(ele, pos)
         
         self.assertTrue((abs(ele.ux + pos.ux - ux_pho) < 1E-10).all())
         self.assertTrue((abs(ele.uy + pos.uy - uy_pho) < 1E-10).all())
@@ -198,7 +198,7 @@ class TestPairNumber(unittest.TestCase):
                 pho = self.pho
                 ele = Particles('ele', -1, 1)
                 pos = Particles('pos', 1, 1)
-                pho.set_pair((ele, pos))
+                pho.set_pair(ele, pos)
                 
                 pho._eval_field(Bfield, 0)
                 pho._calculate_chi()
@@ -206,7 +206,7 @@ class TestPairNumber(unittest.TestCase):
                 pho._pair_event(interval)
                 n_photon = pho.Npart
                 
-                pho._create_pair()
+                pho._create_pair(ele, pos)
                 n_pair = pos.Npart/n_photon
                 
                 P = pair_prob_rate_delta(chi_gamma)

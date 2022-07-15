@@ -24,6 +24,7 @@ class Simulation(object):
 
 
     def start(self, nstep):
+        particles_dict = {p.name : p for p in self.all_particles}
         self.tic = perf_counter_ns()
         for istep in range(self.step, self.step + nstep):
             # push particles
@@ -39,7 +40,7 @@ class Simulation(object):
             for particles in self.all_particles:
                 particles._calculate_chi()
 
-                if hasattr(particles, 'pair'):
+                if hasattr(particles, 'bw_electron'):
                     particles._pair_event(self.dt)
                 if hasattr(particles, 'photon'):
                     particles._photon_event(self.dt)
@@ -50,9 +51,12 @@ class Simulation(object):
             # since particles created in the current loop do NOT further create particle
             for particles in self.all_particles:
                 if hasattr(particles, 'photon_delta'):
-                    particles._create_photon()
+                    photon = particles_dict[particles.photon]
+                    particles._create_photon(photon)
                 if hasattr(particles, 'pair_delta'):
-                    particles._create_pair()
+                    bw_electron = particles_dict[particles.bw_electron]
+                    bw_positron = particles_dict[particles.bw_positron]
+                    particles._create_pair(bw_electron, bw_positron)
 
             for particles in self.all_particles:
                 # from t = (i+0.5)*dt to t = (i+1)*dt

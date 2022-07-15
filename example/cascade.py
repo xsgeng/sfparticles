@@ -44,7 +44,7 @@ photons = Particles('photon', 0, 0)
 positrons = Particles('positron', q=1, m=1)
 electrons = Particles('electron', q=-1, m=1, N=N, props=init(N))
 
-photons.set_pair((electrons, positrons))
+photons.set_pair(electrons, positrons)
 electrons.set_photon(photons)
 positrons.set_photon(photons)
 

@@ -127,20 +127,19 @@ class Particles(object):
         assert self.m > 0, 'photon cannot radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
-        self.photon = photon
+        self.photon = photon.name
         self.event = np.full(self.buffer_size, False)
         self.event_index = np.zeros(self.buffer_size, dtype=int)
         self.photon_delta = np.full(self.buffer_size, 0.0)
         
         
-    def set_pair(self, pair):
+    def set_pair(self, electron, positron):
         assert self.m == 0, 'massive particle cannot create BW pair'
-        assert isinstance(pair, (tuple, list)), 'pair must be tuple or list'
-        assert isinstance(pair[0], Particles) and isinstance(pair[0], Particles), 'pair must be tuple or list of Particle class'
-        assert len(pair) == 2, 'length of pair must be 2'
-        assert pair[0].m == m_e and pair[0].q == -e, 'first of the pair must be electron'
-        assert pair[1].m == m_e and pair[1].q ==  e, 'second of the pair must be positron'
-        self.pair = pair
+        assert isinstance(electron, Particles) and isinstance(positron, Particles), 'pair must be tuple or list of Particle class'
+        assert electron.m == m_e and electron.q == -e, f'first of the pair must be electron'
+        assert positron.m == m_e and positron.q ==  e, f'second of the pair must be positron'
+        self.bw_electron = electron.name
+        self.bw_positron = positron.name
         self.event = np.full(self.buffer_size, False)
         self.event_index = np.zeros(self.buffer_size, dtype=int)
         self.pair_delta = np.full(self.buffer_size, 0.0)
@@ -210,7 +209,7 @@ class Particles(object):
         pick_hard_photon(self.event, self.photon_delta, self.inv_gamma, threshold, self.N_buffered)
         
         
-    def _create_photon(self):
+    def _create_photon(self, pho):
         if not self.event.any():
             return
 
@@ -219,7 +218,6 @@ class Particles(object):
         
         if hasattr(self, 'photon') and N_photon > 0:
             find_event_index(self.event, self.event_index, self.N_buffered)
-            pho = self.photon
             pho._extend(N_photon)
             create_photon(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
@@ -231,17 +229,15 @@ class Particles(object):
             pho.N_buffered += N_photon
         
 
-    def _create_pair(self):
+    def _create_pair(self, ele, pos):
         if not self.event.any():
             return
         
         # events are already false when marked as pruned in QED
         N_pair = self.event.sum()
         
-        if hasattr(self, 'pair'):
+        if hasattr(self, 'bw_electron'):
             find_event_index(self.event, self.event_index, self.N_buffered)
-            ele = self.pair[0]
-            pos = self.pair[1]
             ele._extend(N_pair)
             pos._extend(N_pair)
             
