@@ -269,7 +269,7 @@ class Particles(object):
     def _extend(self, N_new):
         # extend buffer
         if (self.buffer_size - self.N_buffered) < N_new:
-            bufer_size_new = self.N_buffered + N_new
+            bufer_size_new = int(self.N_buffered/4) + N_new
             append_buffer = np.zeros(bufer_size_new)
             for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth'):
                 # self.* = np.concatenate((self.*, append_buffer))
