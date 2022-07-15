@@ -299,7 +299,7 @@ class Particles(object):
         self.N_buffered = N
 
 
-@njit(void(*[float64[:]]*7, int64, boolean[:], float64), parallel=True, cache=True)
+@njit(void(*[float64[:]]*7, int64, boolean[:], float64), parallel=True, cache=False)
 def push_position( x, y, z, ux, uy, uz, inv_gamma, N, to_be_pruned, dt ):
     """
     Advance the particles' positions over `dt` using the momenta `ux`, `uy`, `uz`,
@@ -316,7 +316,7 @@ def push_position( x, y, z, ux, uy, uz, inv_gamma, N, to_be_pruned, dt ):
         z[ip] += cdt * inv_gamma[ip] * uz[ip]
 
 
-@njit(void(*[float64[:]]*10, float64, int64, boolean[:], float64), parallel=True, cache=True)
+@njit(void(*[float64[:]]*10, float64, int64, boolean[:], float64), parallel=True, cache=False)
 def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
     """
     Advance the particles' momenta, using numba
@@ -357,7 +357,7 @@ def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt
     
 
 # TODO
-@njit(parallel=True, cache=True)
+@njit(parallel=True, cache=False)
 def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
     """
     Advance the particles' momenta, using numba
@@ -445,7 +445,7 @@ def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt )
         inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
 
 
-@njit(void(*[float64[:]]*11, int64, boolean[:]), parallel=True, cache=True)
+@njit(void(*[float64[:]]*11, int64, boolean[:]), parallel=True, cache=False)
 def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
     factor = e*hbar / (m_e**2 * c**3)
     for ip in prange(N):
@@ -460,7 +460,7 @@ def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pr
         )
 
 
-@njit(void(*[float64[:]]*4, boolean[:], float64[:], int64, boolean[:]), parallel=True, cache=True)
+@njit(void(*[float64[:]]*4, boolean[:], float64[:], int64, boolean[:]), parallel=True, cache=False)
 def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
     for ip in prange(N):
         if to_be_pruned[ip]:
@@ -478,7 +478,7 @@ def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_prun
         float64[:], boolean[:], 
         int64[:], float64[:], int64, int64,
     ), 
-    parallel=True, cache=True
+    parallel=True, cache=False
 )
 def create_photon(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,
@@ -511,7 +511,7 @@ def create_photon(
         int64[:], float64[:], int64, int64,
         boolean,
     ), 
-    parallel=True, cache=True
+    parallel=True, cache=False
 )
 def create_pair(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,
