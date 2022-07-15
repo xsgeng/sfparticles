@@ -123,31 +123,41 @@ def Aip(z):
 def int_Ai(z):
     return quad(Ai, z, np.inf)[0]
 
-def gen_prob_rate_for_delta(chi_e):
+def gen_photon_prob_rate_for_delta(chi_e):
     factor = -alpha*m_e*c**2/hbar
     def prob_(delta):
-        z = (delta/(1-delta)/chi_e)**(2/3)
-        g = 1 + delta**2/2/(1-delta)
-        return factor*(int_Ai(z) + g*2/z * Aip(z))
+        chi_gamma = delta * chi_e
+        chi_ep = chi_e - chi_gamma
+        z = (chi_gamma/chi_e/chi_ep)**(2/3)
+        return factor*(int_Ai(z) + (2.0/z + chi_gamma*np.sqrt(z)) * Aip(z))
 
     return prob_
 
-def integral_over_delta(chi_e):
-    P = gen_prob_rate_for_delta(chi_e)
+def gen_pair_prob_rate_for_delta(chi_gamma):
+    factor = alpha*m_e*c**2/hbar
+    def prob_(delta):
+        chi_e = delta * chi_gamma
+        chi_ep = chi_gamma - chi_e
+        z = (chi_gamma/chi_e/chi_ep)**(2/3)
+        return factor*(int_Ai(z) + (2.0/z - chi_gamma*np.sqrt(z)) * Aip(z))
+
+    return prob_
+
+def integral_photon_prob_over_delta(chi_e):
+    P = gen_photon_prob_rate_for_delta(chi_e)
+    prob_rate_total, _ = quad(P, 0, 1)
+    return prob_rate_total
+
+def integral_pair_prob_over_delta(chi_gamma):
+    P = gen_pair_prob_rate_for_delta(chi_gamma)
     prob_rate_total, _ = quad(P, 0, 1)
     return prob_rate_total
 
 
-def prob_rate_for_chi_delta(chi_e, delta):
-    factor = -alpha*m_e*c**2/hbar
-    z = (delta/(1-delta)/chi_e)**(2/3)
-    g = 1 + delta**2/2/(1-delta)
-    return factor*(int_Ai(z) + g*2/z * Aip(z))
-
 
 def photon_prob_rate_total(chi_N=256, log_chi_min=-3, log_chi_max=2):
     with multiprocessing.Pool() as pool:
-        data = pool.map(integral_over_delta, np.logspace(log_chi_min, log_chi_max, chi_N))
+        data = pool.map(integral_photon_prob_over_delta, np.logspace(log_chi_min, log_chi_max, chi_N))
     return np.array(data)
 
 
