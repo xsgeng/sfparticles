@@ -68,12 +68,12 @@ class TestParticleResize(unittest.TestCase):
 
         e._extend(N_new1)
         self.assertEqual(e.N_buffered, N)
-        self.assertEqual(e.buffer_size, 2*N + N_new1)
+        self.assertEqual(e.buffer_size, int(N/4) + N + N_new1)
         self.assertEqual(e.x.shape[0], e.buffer_size)
 
         e._extend(N_new2)
         self.assertEqual(e.N_buffered, N)
-        self.assertEqual(e.buffer_size, (2*N + N_new1) + N + N_new2 )
+        self.assertEqual(e.buffer_size, (int(N/4) + N + N_new1) + int(N/4) + N_new2 )
 
 
         attrs = [prop + i for prop, i in product(['', 'u', 's', 'E', 'B'], ['x', 'y', 'z'])] + \
