@@ -64,6 +64,7 @@ class Simulation(object):
             
             
             self.t += self.dt
+            self.step += 1
             if self.print_every is None:
                 continue
             if (istep+1) % self.print_every == 0 :
