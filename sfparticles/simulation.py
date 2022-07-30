@@ -13,6 +13,11 @@ class Simulation(object):
         t0 = 0.0,
         photon_threshold = 2.0
     ) -> None:
+        '''
+        all_particles:
+            specify all particles
+        '''
+        # TODO: check all inputs
         self.all_particles = all_particles
         self.dt = dt
         self.fields = fields

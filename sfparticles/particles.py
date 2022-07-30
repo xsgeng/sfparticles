@@ -1,6 +1,6 @@
 from typing import Tuple, Union
 import numpy as np
-from scipy.constants import c, m_e, e, hbar
+from scipy.constants import c, m_e, e, hbar, epsilon_0, pi
 from numba import njit, prange, guvectorize, float64, int64, void, boolean
 from .fields import Fields
 
@@ -17,6 +17,7 @@ class Particles(object):
         self, name : str,
         q: int, m: float, N: int = 0,
         has_spin = False,
+        LL = False,
         props : Tuple = None,
     ) -> None:
         """
@@ -41,6 +42,7 @@ class Particles(object):
         self.q = q * e
         self.m = m * m_e
         self.has_spin = has_spin
+        self.LL = LL
         N = int(N)
 
         assert m >= 0, 'negative mass'
@@ -125,6 +127,7 @@ class Particles(object):
 
     def set_photon(self, photon):
         assert self.m > 0, 'photon cannot radiate photon'
+        assert self.LL is False, 'LL equation does not radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
         self.photon = photon.name
@@ -163,6 +166,12 @@ class Particles(object):
                     self.Ex, self.Ey, self.Ez, 
                     self.Bx, self.By, self.Bz,
                     self.q, self.N_buffered, self._to_be_pruned, dt
+                )
+            if self.LL:
+                LL_push(
+                    self.ux, self.uy, self.uz, 
+                    self.inv_gamma, self.chi,  
+                    self.N_buffered, self._to_be_pruned, dt
                 )
 
 
@@ -444,6 +453,19 @@ def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt )
         uz[ip] = s*( uzp + tz*ut + uxp*ty - uyp*tx )
         inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
 
+
+@njit(void(*[float64[:]]*5, int64, boolean[:], float64), parallel=True, cache=False)
+def LL_push( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ) :
+    factor = -2/3 / (4*pi*epsilon_0) * e**2 * m_e * c / hbar**2 * dt
+    for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
+        
+        ux[ip] += factor * chi_e[ip]**2 * ux[ip]*inv_gamma[ip]
+        uy[ip] += factor * chi_e[ip]**2 * uy[ip]*inv_gamma[ip]
+        uz[ip] += factor * chi_e[ip]**2 * uz[ip]*inv_gamma[ip]
+        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
+    
 
 @njit(void(*[float64[:]]*11, int64, boolean[:]), parallel=True, cache=False)
 def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
