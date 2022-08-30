@@ -7,4 +7,4 @@ dependencies = [
     "scipy",
     "h5py",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.7"
