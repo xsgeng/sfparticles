@@ -12,9 +12,10 @@ class RadiationReactionType(Enum):
     `LL` : approximated Landau-Lifshitz equation for gamma >> 1
     `cLL` : quantum-corrected Landau-Lifshitz equation
     """
-    photon = 0
-    LL = 1
-    cLL = 2
+    NONE = auto()
+    PHOTON = auto()
+    LL = auto()
+    CLL = auto()
     
 
 class Particles(object):
@@ -22,7 +23,7 @@ class Particles(object):
         self, name : str,
         q: int, m: float, N: int = 0,
         has_spin = False,
-        RR : RadiationReactionType = RadiationReactionType.photon,
+        RR : RadiationReactionType = RadiationReactionType.PHOTON,
         props : Tuple = None,
     ) -> None:
         """
@@ -60,8 +61,7 @@ class Particles(object):
         if m == 0:
             assert q == 0, 'photons cannot have mass'
 
-        if RR is not None:
-            assert isinstance(RR, RadiationReactionType), 'RR must be RadiationReactionType or None'
+        assert isinstance(RR, RadiationReactionType), 'RR must be RadiationReactionType'
 
         if props is None:
             x = np.zeros(N)
@@ -143,7 +143,7 @@ class Particles(object):
 
     def set_photon(self, photon):
         assert self.m > 0, 'photon cannot radiate photon'
-        assert self.RR == RadiationReactionType.photon, 'LL equation does not radiate photon'
+        assert self.RR == RadiationReactionType.PHOTON, 'LL equation does not radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
         self.photon = photon.name
@@ -221,8 +221,8 @@ class Particles(object):
         # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
         photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
         # RR
-        if self.RR == RadiationReactionType.photon:
-            radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
+        if self.RR == RadiationReactionType.PHOTON:
+            photon_recoil(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
         return self.event, self.photon_delta
 
     
@@ -500,7 +500,7 @@ def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pr
 
 
 @njit(void(*[float64[:]]*4, boolean[:], float64[:], int64, boolean[:]), parallel=True, cache=False)
-def radiation_reaction(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
+def photon_recoil(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
     for ip in prange(N):
         if to_be_pruned[ip]:
             continue
