@@ -1,3 +1,4 @@
+from enum import Enum, auto
 from typing import Tuple, Union
 import numpy as np
 from scipy.constants import c, m_e, e, hbar, epsilon_0, pi
@@ -6,18 +7,22 @@ from .fields import Fields
 
 from .qed import photon_from_rejection_sampling, pair_from_rejection_sampling, update_optical_depth
 
+class RadiationReactionType(Enum):
+    """
+    `LL` : approximated Landau-Lifshitz equation for gamma >> 1
+    `cLL` : quantum-corrected Landau-Lifshitz equation
+    """
+    photon = 0
+    LL = 1
+    cLL = 2
+    
+
 class Particles(object):
-    """
-    ## 粒子属性
-    - `q`, `m` : 电荷和质量，单位是e和m_e
-    - `x`, `y`, `z` : 空间坐标
-    - `ux`, `uy`, `uz` : 无量纲动量 p/mc
-    """
     def __init__(
         self, name : str,
         q: int, m: float, N: int = 0,
         has_spin = False,
-        LL = False,
+        RR : RadiationReactionType = RadiationReactionType.photon,
         props : Tuple = None,
     ) -> None:
         """
@@ -31,6 +36,12 @@ class Particles(object):
             粒子数
         `has_spin` : bool
             是否包含自旋
+        `RR` : RadiationReactionType or None
+            辐射反作用类型。对m=0光子无效。
+                `None` : 无RR
+                `RadiationReactionType.photon` : 光子产生辐射反作用
+                `RadiationReactionType.LL` : LL方程
+                `RadiationReactionType.cLL` : 量子修正的LL方程
         `props` : Tuple(x, y, z, ux, uy, uz, [sx, sy, sz])
             粒子的初始状态，可包含自旋矢量。如果`has_spin=True`且未给出sx, sy, sz，默认sz=1
             这些属性向量的长度为buffer的长度，前N个为粒子的属性。
@@ -42,10 +53,13 @@ class Particles(object):
         self.q = q * e
         self.m = m * m_e
         self.has_spin = has_spin
-        self.LL = LL
+        self.RR = RR
         N = int(N)
 
         assert m >= 0, 'negative mass'
+
+        if RR is not None:
+            assert isinstance(RR, RadiationReactionType), 'RR must be RadiationReactionType or None'
 
         if props is None:
             x = np.zeros(N)
@@ -127,7 +141,7 @@ class Particles(object):
 
     def set_photon(self, photon):
         assert self.m > 0, 'photon cannot radiate photon'
-        assert self.LL is False, 'LL equation does not radiate photon'
+        assert self.RR == RadiationReactionType.photon, 'LL equation does not radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
         self.photon = photon.name
@@ -167,7 +181,7 @@ class Particles(object):
                     self.Bx, self.By, self.Bz,
                     self.q, self.N_buffered, self._to_be_pruned, dt
                 )
-            if self.LL:
+            if self.RR == RadiationReactionType.LL:
                 LL_push(
                     self.ux, self.uy, self.uz, 
                     self.inv_gamma, self.chi,  
@@ -205,7 +219,8 @@ class Particles(object):
         # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
         photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
         # RR
-        radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
+        if self.RR == RadiationReactionType.photon:
+            radiation_reaction(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
         return self.event, self.photon_delta
 
     
