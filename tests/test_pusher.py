@@ -67,13 +67,14 @@ class TestPusher(unittest.TestCase):
         self.assertLess(np.abs(np.sqrt(ux**2 + uy**2 + uz**2) - u0)/u0, 1E-10)
     
     def test_LL(self):
-        factor = -2/3 / 4 /pi / epsilon_0 * e**2 * m_e * c / hbar**2
-        print(factor)
-        ux = np.asarray([1000], dtype=float)
+        ux0 = 1000.0
+        ux = np.asarray([ux0], dtype=float)
         uy = np.asarray([0], dtype=float)
         uz = np.asarray([0], dtype=float)
         inv_gamma = 1 / np.sqrt(1 + ux**2 + uy**2 + uz**2)
         chi_e = np.asarray([1], dtype=float)
         to_be_pruned = np.array([False])
         LL_push( ux, uy, uz, inv_gamma, chi_e,  1, to_be_pruned, 2.67E-17 )
-        print(ux, inv_gamma)
+        self.assertLess(ux, ux0, "ux after LL push is greater than intial")
+        # 10% energy loss for gamma=1000 and chi=1
+        self.assertAlmostEqual((ux0-ux[0])/ux0, 0.1, 2)
