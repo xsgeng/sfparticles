@@ -7,6 +7,8 @@ import numpy as np
 from sfparticles import Particles
 from itertools import product
 
+from sfparticles.particles import RadiationReactionType
+
 class TestParticlesInit(unittest.TestCase):
     def test_particles_init(self):
         p = Particles('e', q=-1, m=1, N=2)
@@ -19,6 +21,18 @@ class TestParticlesInit(unittest.TestCase):
             with self.subTest(attr):
                 self.assertTrue((getattr(p, attr) == np.zeros(2)).all())
         
+        with self.assertRaises(AssertionError):
+            Particles('pho', q=1, m=0, N=2)
+
+        with self.assertRaises(AssertionError):
+            Particles('ele', q=-1, m=1, RR='LL')
+
+    def test_set_photon(self):
+        ele = Particles('ele', q=-1, m=1, RR=RadiationReactionType.LL)
+        pho = Particles('pho', q=0, m=0, N=2)
+        
+        with self.assertRaises(AssertionError):
+            ele.set_photon(pho)
 
     def test_spin_init(self):
         p = Particles('e', q=-1, m=1, N=2, has_spin=True)

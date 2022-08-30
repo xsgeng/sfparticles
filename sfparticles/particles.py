@@ -57,6 +57,8 @@ class Particles(object):
         N = int(N)
 
         assert m >= 0, 'negative mass'
+        if m == 0:
+            assert q == 0, 'photons cannot have mass'
 
         if RR is not None:
             assert isinstance(RR, RadiationReactionType), 'RR must be RadiationReactionType or None'
