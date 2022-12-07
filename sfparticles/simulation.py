@@ -1,7 +1,7 @@
 from time import perf_counter_ns
 from .fields import Fields
 from .particles import Particles, c
-
+from tqdm import tqdm
 
 
 class Simulation(object):
@@ -27,10 +27,20 @@ class Simulation(object):
         self.t = t0
         self.step = 0
 
+        self.progress_bar = None
 
-    def start(self, nstep):
+
+    def start(self, nstep, total=None):
+        if total is None:
+            total = nstep
+
+        if self.progress_bar is None:
+            if self.print_every:
+                self.progress_bar = tqdm(total=total, unit='step', smoothing=1)
+
         particles_dict = {p.name : p for p in self.all_particles}
-        self.tic = perf_counter_ns()
+
+        tic = perf_counter_ns()
         for istep in range(self.step, self.step + nstep):
             # push particles
             for particles in self.all_particles:
@@ -72,17 +82,16 @@ class Simulation(object):
             self.step += 1
             if self.print_every is None:
                 continue
-            if (istep+1) % self.print_every == 0 :
-                elapsed = perf_counter_ns() - self.tic
-                self.tic = perf_counter_ns()
-
+            elapsed = perf_counter_ns() - tic
+            tic = perf_counter_ns()
+            if self.step % self.print_every == 0:
                 Ntotal = sum([particles.Npart for particles in self.all_particles])
-                print(
-                    f'step: {istep+1}\tct: {c*self.t/1e-6:.2f} um\t',
-                    '\t'.join([f"{particles.Npart} {particles.name}" for particles in self.all_particles]),
-                    f'\t{elapsed/self.print_every/Ntotal:.2f} ns/particle',
-                    f'\t{elapsed/1E9:.2f} s'
-                )
+                ns_per_particle = elapsed/Ntotal
+
+                particle_num_str = ','.join([f"{particles.Npart} {particles.name}" for particles in self.all_particles])
+                self.progress_bar.set_postfix_str(f"{particle_num_str}, {ns_per_particle:.0f}ns/particle")
+                self.progress_bar.update(self.print_every)
+                
 
         for particles in self.all_particles:
             particles._prune()

@@ -1,10 +1,11 @@
 [project]
 name = "sfparticles"
-version = "0.1"
+version = "0.2"
 dependencies = [
     "numpy",
     "numba",
     "scipy",
     "h5py",
+    "tqdm",
 ]
 requires-python = ">=3.7"
