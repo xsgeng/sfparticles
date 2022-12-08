@@ -1,6 +1,6 @@
 from numba import njit, prange, void, float64, boolean, int64
 from numpy import random
-from .tables import photon_prob_rate_from_table, pair_prob_rate_from_table
+from .rejection_sampling_tables import photon_prob_rate_from_table, pair_prob_rate_from_table
 
 @njit(void(float64[:], float64[:], float64, int64, boolean[:], boolean[:], float64[:]), parallel=True, cache=False)
 def photon_from_rejection_sampling(inv_gamma, chi_e, dt, N, to_be_pruned, event, delta):

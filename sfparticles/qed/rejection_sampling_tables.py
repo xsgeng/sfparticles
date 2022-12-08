@@ -11,11 +11,9 @@ import multiprocessing
 
 
 # built-in tables
-table_path = os.path.join(os.path.dirname(__file__), 'tables.h5')
-if os.path.exists(table_path) and __name__ == "sfparticles.qed.tables":
+table_path = os.path.join(os.path.dirname(__file__), 'rejection_sampling_tables.h5')
+if os.path.exists(table_path) and __name__ == "sfparticles.qed.rejection_sampling_tables":
     with h5py.File(table_path, 'r') as f:
-        dset = f['photon_prob_rate_total']
-
         dset = f['int_Ai']
         _int_Ai_table = dset[()]
         dset = f['Aip']
@@ -97,7 +95,7 @@ def table_gen(
     chi_N=256, log_chi_min=-3.0, log_chi_max=2.0, 
     z_N=1024, z_min=0.0, z_max=100.0
 ):
-    with h5py.File(os.path.join(table_path, 'tables.h5'), 'w') as h5f:
+    with h5py.File(os.path.join(table_path, 'rejection_sampling_tables.h5'), 'w') as h5f:
         print("Integrating Ai")
         z = np.linspace(z_min, z_max, z_N)
 
