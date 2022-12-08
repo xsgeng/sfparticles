@@ -23,8 +23,8 @@ if os.path.exists(table_path) and __name__ == "sfparticles.qed.optical_depth_tab
         _integral_pair_prob_along_delta = f['integral_pair_prob_along_delta'][()]
 
         _chi_N = f.attrs['chi_N']
-        _chi_range = f.attrs['log_chi_range']
-        _chi_delta = f.attrs['log_chi_delta']
+        _log_chi_range = f.attrs['log_chi_range']
+        _log_chi_delta = f.attrs['log_chi_delta']
         _delta_N = f.attrs['delta_N']
         _log_delta_range = f.attrs['log_delta_range']
         _log_delta_delta = f.attrs['log_delta_delta']
@@ -34,12 +34,12 @@ if os.path.exists(table_path) and __name__ == "sfparticles.qed.optical_depth_tab
 @njit
 def _get_chi_idx(chi):
     log_chi = np.log10(chi)
-    if log_chi < _chi_range[0]:
+    if log_chi < _log_chi_range[0]:
         return -1
-    if log_chi > _chi_range[1]:
+    if log_chi > _log_chi_range[1]:
         idx = _chi_N - 1
-    if _chi_range[0] <= log_chi <= _chi_range[1]:
-        idx = math.floor((log_chi - _chi_range[0]) / _chi_delta)
+    if _log_chi_range[0] <= log_chi <= _log_chi_range[1]:
+        idx = math.floor((log_chi - _log_chi_range[0]) / _log_chi_delta)
 
     return idx
 
@@ -48,10 +48,10 @@ def _linear_interp1d(chi, table1d):
     idx = _get_chi_idx(chi)
     if idx == -1:
         return 0.0
-    log_chi_left = _chi_range[0] + idx*_chi_delta
+    log_chi_left = _log_chi_range[0] + idx*_log_chi_delta
     # linear interp
     log_chi = np.log10(chi)
-    k = (table1d[idx+1] - table1d[idx]) / _chi_delta
+    k = (table1d[idx+1] - table1d[idx]) / _log_chi_delta
     prob_rate = table1d[idx] + k * (log_chi-log_chi_left)
     return prob_rate
 
@@ -60,7 +60,12 @@ def _linear_interp1d(chi, table1d):
 def _bisect_interp(chi, table2d):
     low, high = 0, _delta_N-1
     chi_idx = _get_chi_idx(chi)
-    r = np.random.rand()
+    
+    ymin = (table2d[chi_idx, 0] + table2d[chi_idx+1, 0])*0.5
+    ymax = (table2d[chi_idx, -1] + table2d[chi_idx+1, -1])*0.5
+
+    # lower than ymin are ignored
+    r = np.random.rand() * (ymax-ymin) + ymin
     while low <= high:
         mid = int((low + high)/2)
         mid_delta = (table2d[chi_idx, mid] + table2d[chi_idx+1, mid])*0.5
@@ -94,7 +99,7 @@ def integ_pair_prob_rate_from_table(chi_gamma):
 
 @njit
 def photon_delta_from_chi_delta_table(chi_e):
-    return 0.5
+    # return 0.9
     return _bisect_interp(chi_e, _integral_photon_prob_along_delta)
 
 @njit
