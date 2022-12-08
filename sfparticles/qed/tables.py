@@ -1,7 +1,7 @@
 import os
 
 import numpy as np
-from numba import njit
+from numba import njit, cfunc
 import math
 from scipy.constants import alpha, pi, m_e, hbar, c
 from scipy.special import airy
@@ -12,13 +12,9 @@ import multiprocessing
 
 # built-in tables
 table_path = os.path.join(os.path.dirname(__file__), 'tables.h5')
-if os.path.exists(table_path):
+if os.path.exists(table_path) and __name__ == "sfparticles.qed.tables":
     with h5py.File(table_path, 'r') as f:
         dset = f['photon_prob_rate_total']
-        _photon_prob_rate_total_table = dset[()]
-        _chi_N = dset.attrs['chi_N']
-        _chi_range = dset.attrs['log_chi_range']
-        _chi_delta = dset.attrs['log_chi_delta']
 
         dset = f['int_Ai']
         _int_Ai_table = dset[()]
@@ -30,34 +26,6 @@ if os.path.exists(table_path):
         _z_delta = dset.attrs['z_delta']
 
     del f, dset
-
-
-'''
-Optical depth
-'''
-@njit
-def integ_prob_rate_from_table(chi_e):
-    log_chi_e = np.log10(chi_e)
-    if log_chi_e < _chi_range[0]:
-        return 0.0
-    if log_chi_e > _chi_range[1]:
-        idx = _chi_N - 1
-    if _chi_range[0] <= log_chi_e <= _chi_range[1]:
-        idx = math.floor((log_chi_e - _chi_range[0]) / _chi_delta)
-
-    log_chi_e_left = _chi_range[0] + idx*_chi_delta
-    # linear interp
-    k = (_photon_prob_rate_total_table[idx+1] - _photon_prob_rate_total_table[idx]) / _chi_delta
-    prob_rate = _photon_prob_rate_total_table[idx] + k * (log_chi_e-log_chi_e_left)
-
-    return prob_rate
-
-
-# TODO
-@njit
-def delta_from_chi_delta_table(chi_e):
-    # dummy
-    return np.random.rand()
 
 
 '''
@@ -123,43 +91,6 @@ def Aip(z):
 def int_Ai(z):
     return quad(Ai, z, np.inf)[0]
 
-def gen_photon_prob_rate_for_delta(chi_e):
-    factor = -alpha*m_e*c**2/hbar
-    def prob_(delta):
-        chi_gamma = delta * chi_e
-        chi_ep = chi_e - chi_gamma
-        z = (chi_gamma/chi_e/chi_ep)**(2/3)
-        return factor*(int_Ai(z) + (2.0/z + chi_gamma*np.sqrt(z)) * Aip(z))
-
-    return prob_
-
-def gen_pair_prob_rate_for_delta(chi_gamma):
-    factor = alpha*m_e*c**2/hbar
-    def prob_(delta):
-        chi_e = delta * chi_gamma
-        chi_ep = chi_gamma - chi_e
-        z = (chi_gamma/chi_e/chi_ep)**(2/3)
-        return factor*(int_Ai(z) + (2.0/z - chi_gamma*np.sqrt(z)) * Aip(z))
-
-    return prob_
-
-def integral_photon_prob_over_delta(chi_e):
-    P = gen_photon_prob_rate_for_delta(chi_e)
-    prob_rate_total, _ = quad(P, 0, 1)
-    return prob_rate_total
-
-def integral_pair_prob_over_delta(chi_gamma):
-    P = gen_pair_prob_rate_for_delta(chi_gamma)
-    prob_rate_total, _ = quad(P, 0, 1)
-    return prob_rate_total
-
-
-
-def photon_prob_rate_total(chi_N=256, log_chi_min=-3, log_chi_max=2):
-    with multiprocessing.Pool() as pool:
-        data = pool.map(integral_photon_prob_over_delta, np.logspace(log_chi_min, log_chi_max, chi_N))
-    return np.array(data)
-
 
 def table_gen(
     table_path, 
@@ -178,19 +109,12 @@ def table_gen(
         dset.attrs['z_delta'] = (z_max - z_min) / (z_N - 1)
 
         print("Ai'")
-        _Aip = airy(z)[1]
+        _Aip = Aip(z)
         dset = h5f.create_dataset('Aip', data=_Aip)
         dset.attrs['z_N'] = z_N
         dset.attrs['z_range'] = (z_min, z_max)
         dset.attrs['z_delta'] = (z_max - z_min) / (z_N - 1)
 
-        print("计算不同chi_e的总辐射概率")
-        dset = h5f.create_dataset('photon_prob_rate_total', data=photon_prob_rate_total(chi_N, log_chi_min, log_chi_max))
-        dset.attrs['chi_N'] = chi_N
-        dset.attrs['log_chi_range'] = (log_chi_min, log_chi_max)
-        dset.attrs['log_chi_delta'] = (log_chi_max - log_chi_min) / (chi_N - 1)
-
-        # TODO: 2D chi-delta
 
 if __name__ == '__main__':
     table_gen(os.path.dirname(__file__))
