@@ -67,6 +67,8 @@ class Particles(object):
         assert isinstance(RR, RadiationReactionType), 'RR must be RadiationReactionType'
 
         if props is None:
+            if m == 0:
+                assert N == 0, "cannot initialize photons with only N without props."
             x = np.zeros(N)
             y = np.zeros(N)
             z = np.zeros(N)
@@ -117,6 +119,7 @@ class Particles(object):
         if m > 0:
             self.inv_gamma = 1./np.sqrt( 1 + self.ux**2 + self.uy**2 + self.uz**2 )
         else:
+            assert ( self.ux**2 + self.uy**2 + self.uz**2 > 0).all(), "photon momentum cannot be 0"
             self.inv_gamma = 1./np.sqrt( self.ux**2 + self.uy**2 + self.uz**2 )
         self.attrs += ['inv_gamma']
         
