@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from scipy.constants import alpha, pi, m_e, hbar, c
 
-from sfparticles.qed.rejection_sampling_tables import photon_prob_rate_total
+from sfparticles.qed.optical_depth_tables import photon_prob_rate_total
 
 chi_range = (-3, 2) # 0.001-100
 chi_N = 256
