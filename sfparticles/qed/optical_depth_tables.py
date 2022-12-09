@@ -99,7 +99,6 @@ def integ_pair_prob_rate_from_table(chi_gamma):
 
 @njit
 def photon_delta_from_chi_delta_table(chi_e):
-    # return 0.9
     return _bisect_interp(chi_e, _integral_photon_prob_along_delta)
 
 @njit
