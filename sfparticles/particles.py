@@ -143,7 +143,7 @@ class Particles(object):
 
     def set_photon(self, photon):
         assert self.m > 0, 'photon cannot radiate photon'
-        assert self.RR == RadiationReactionType.PHOTON, 'LL equation does not radiate photon'
+        assert self.RR != RadiationReactionType.LL and self.RR != RadiationReactionType.CLL, 'LL equation does not radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
         self.photon = photon.name
