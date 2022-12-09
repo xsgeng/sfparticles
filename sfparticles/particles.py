@@ -6,7 +6,7 @@ from numba import njit, prange, guvectorize, float64, int64, void, boolean
 from .fields import Fields
 
 from .qed import photon_from_rejection_sampling, pair_from_rejection_sampling, \
-    _use_optical_depth, update_optical_depth
+    _use_optical_depth, update_tau_e, update_tau_gamma
 
 class RadiationReactionType(Enum):
     """
@@ -162,8 +162,8 @@ class Particles(object):
         self.photon_delta = np.zeros(self.buffer_size)
         self.attrs += ["event", "event_index", "photon_delta"]
         if _use_optical_depth:
-            self.optical_depth = np.zeros(self.buffer_size)
-            self.attrs += ['optical_depth']
+            self.tau = np.zeros(self.buffer_size)
+            self.attrs += ['tau']
         
         
     def set_pair(self, electron, positron):
@@ -177,7 +177,9 @@ class Particles(object):
         self.event_index = np.zeros(self.buffer_size, dtype=int)
         self.pair_delta = np.zeros(self.buffer_size)
         self.attrs += ["event", "event_index", "pair_delta"]
-
+        if _use_optical_depth:
+            self.tau = np.zeros(self.buffer_size)
+            self.attrs += ['tau']
         
     def _push_momentum(self, dt):
         if self.m > 0:
@@ -234,7 +236,7 @@ class Particles(object):
 
     def _photon_event(self, dt):
         if _use_optical_depth:
-            update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.photon_delta)
+            update_tau_e(self.tau, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.photon_delta)
         else:
             photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
         # RR
@@ -244,7 +246,10 @@ class Particles(object):
 
     
     def _pair_event(self, dt):
-        pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta )
+        if _use_optical_depth:
+            update_tau_gamma(self.tau, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.pair_delta)
+        else:
+            pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta )
         return self.event, self.pair_delta
 
     
