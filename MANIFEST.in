@@ -1,1 +1,2 @@
-include sfparticles/qed/tables.h5
+include sfparticles/qed/optical_depth_tables.h5
+include sfparticles/qed/rejection_sampling_tables.h5
