@@ -20,7 +20,7 @@ ctau = 5*um
 
 a0_norm = e / (m_e * c * omega0)
 
-N = int(1)
+N = int(100)
 Tsim = 6*ctau/c
 dt = 1*um / c / 100
 step = int(Tsim / dt)
@@ -48,16 +48,5 @@ photons.set_pair(electrons, positrons)
 electrons.set_photon(photons)
 positrons.set_photon(photons)
 
-sim = Simulation(electrons, positrons, photons, dt=dt, fields=laser, print_every=None)
+sim = Simulation(electrons, positrons, photons, dt=dt, fields=laser, print_every=1, photon_threshold=20)
 sim.start(step)
-print(positrons.Npart)
-
-fig, ax = plt.subplots()
-
-ax.hist2d(
-    positrons.x/1E-6, positrons.y/1E-6, 
-    bins=128, 
-)
-
-fig.savefig('test.png', dpi=300)
-
