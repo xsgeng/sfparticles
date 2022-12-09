@@ -16,20 +16,23 @@ class TestParticlesInit(unittest.TestCase):
         self.assertEqual(p.m, m_e)
         self.assertEqual(p.N_buffered, 2)
 
+
+
         for prop, i in product(['', 'u', 'E', 'B'], ['x', 'y', 'z']):
             attr = prop + i
             with self.subTest(attr):
                 self.assertTrue((getattr(p, attr) == np.zeros(2)).all())
-        
-        with self.assertRaises(AssertionError):
-            Particles('pho', q=1, m=0, N=2)
 
+        with self.assertRaises(AssertionError):
+            Particles('pho', q=0, m=0, N=2)
+        with self.assertRaises(AssertionError):
+            Particles('pho', q=1, m=0)
         with self.assertRaises(AssertionError):
             Particles('ele', q=-1, m=1, RR='LL')
 
     def test_set_photon(self):
         ele = Particles('ele', q=-1, m=1, RR=RadiationReactionType.LL)
-        pho = Particles('pho', q=0, m=0, N=2)
+        pho = Particles('pho', q=0, m=0)
         
         with self.assertRaises(AssertionError):
             ele.set_photon(pho)
@@ -59,6 +62,8 @@ class TestParticlesInit(unittest.TestCase):
                 self.assertTrue((getattr(p, attr) == target).all(), msg=f"{attr} = {getattr(p, attr)}")
 
     def test_prop_init_scalar(self):
+        with self.assertRaises(AssertionError):
+            Particles('pho', q=1, m=0, N=2, props=[[0, 0, 0]]*6)
 
         p = Particles('e', q=-1, m=1, N=1, props=[1]*6)
         target = np.array([1], dtype=np.float64)
@@ -91,7 +96,7 @@ class TestParticleResize(unittest.TestCase):
 
 
         attrs = [prop + i for prop, i in product(['', 'u', 's', 'E', 'B'], ['x', 'y', 'z'])] + \
-            ['inv_gamma', 'optical_depth', '_to_be_pruned', 'event', 'photon_delta', 'event_index']
+            ['inv_gamma', '_to_be_pruned', 'event', 'photon_delta', 'event_index']
         for attr in attrs:
             with self.subTest(attr):
                 self.assertEqual(len(getattr(e, attr)), e.buffer_size)

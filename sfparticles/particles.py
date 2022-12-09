@@ -5,7 +5,8 @@ from scipy.constants import c, m_e, e, hbar, epsilon_0, pi
 from numba import njit, prange, guvectorize, float64, int64, void, boolean
 from .fields import Fields
 
-from .qed import photon_from_rejection_sampling, pair_from_rejection_sampling, update_optical_depth
+from .qed import photon_from_rejection_sampling, pair_from_rejection_sampling, \
+    _use_optical_depth, update_tau_e, update_tau_gamma
 
 class RadiationReactionType(Enum):
     """
@@ -57,6 +58,8 @@ class Particles(object):
         self.RR = RR
         N = int(N)
 
+        self.attrs = []
+
         assert m >= 0, 'negative mass'
         if m == 0:
             assert q == 0, 'photons cannot have mass'
@@ -64,6 +67,8 @@ class Particles(object):
         assert isinstance(RR, RadiationReactionType), 'RR must be RadiationReactionType'
 
         if props is None:
+            if m == 0:
+                assert N == 0, "cannot initialize photons with only N without props."
             x = np.zeros(N)
             y = np.zeros(N)
             z = np.zeros(N)
@@ -102,21 +107,27 @@ class Particles(object):
         self.ux = np.asarray(ux, dtype=np.float64)
         self.uy = np.asarray(uy, dtype=np.float64)
         self.uz = np.asarray(uz, dtype=np.float64)
+        self.attrs += ['x', 'y', 'z', 'ux', 'uy', 'uz']
 
         if self.has_spin:
             self.sx = sx
             self.sy = sy
             self.sz = sz
+            self.attrs += ['sx', 'sy', 'sz']
 
         # gamma factor
         if m > 0:
             self.inv_gamma = 1./np.sqrt( 1 + self.ux**2 + self.uy**2 + self.uz**2 )
         else:
+            assert ( self.ux**2 + self.uy**2 + self.uz**2 > 0).all(), "photon momentum cannot be 0"
             self.inv_gamma = 1./np.sqrt( self.ux**2 + self.uy**2 + self.uz**2 )
+        self.attrs += ['inv_gamma']
         
         # quantum parameter
         self.chi = np.zeros(N)
-        self.optical_depth = -np.log(1 - np.random.rand(N))
+        self.attrs += ['chi']
+
+
 
         # fields at particle positions
         self.Ez = np.zeros(N)
@@ -125,6 +136,7 @@ class Particles(object):
         self.Bz = np.zeros(N)
         self.Bx = np.zeros(N)
         self.By = np.zeros(N)
+        self.attrs += ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz']
 
         # buffer
         self.N_buffered = N
@@ -132,6 +144,7 @@ class Particles(object):
 
         # prune flag
         self._to_be_pruned = np.full(N, False)
+        self.attrs += ['_to_be_pruned']
 
     @property
     def Npart(self):
@@ -149,7 +162,11 @@ class Particles(object):
         self.photon = photon.name
         self.event = np.full(self.buffer_size, False)
         self.event_index = np.zeros(self.buffer_size, dtype=int)
-        self.photon_delta = np.full(self.buffer_size, 0.0)
+        self.photon_delta = np.zeros(self.buffer_size)
+        self.attrs += ["event", "event_index", "photon_delta"]
+        if _use_optical_depth:
+            self.tau = np.zeros(self.buffer_size)
+            self.attrs += ['tau']
         
         
     def set_pair(self, electron, positron):
@@ -161,8 +178,11 @@ class Particles(object):
         self.bw_positron = positron.name
         self.event = np.full(self.buffer_size, False)
         self.event_index = np.zeros(self.buffer_size, dtype=int)
-        self.pair_delta = np.full(self.buffer_size, 0.0)
-
+        self.pair_delta = np.zeros(self.buffer_size)
+        self.attrs += ["event", "event_index", "pair_delta"]
+        if _use_optical_depth:
+            self.tau = np.zeros(self.buffer_size)
+            self.attrs += ['tau']
         
     def _push_momentum(self, dt):
         if self.m > 0:
@@ -218,8 +238,10 @@ class Particles(object):
 
 
     def _photon_event(self, dt):
-        # event, photon_delta = update_optical_depth(self.optical_depth, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned)
-        photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
+        if _use_optical_depth:
+            update_tau_e(self.tau, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.photon_delta)
+        else:
+            photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
         # RR
         if self.RR == RadiationReactionType.PHOTON:
             photon_recoil(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
@@ -227,7 +249,10 @@ class Particles(object):
 
     
     def _pair_event(self, dt):
-        pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta )
+        if _use_optical_depth:
+            update_tau_gamma(self.tau, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.pair_delta)
+        else:
+            pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta )
         return self.event, self.pair_delta
 
     
@@ -291,35 +316,23 @@ class Particles(object):
     def _extend(self, N_new):
         # extend buffer
         if (self.buffer_size - self.N_buffered) < N_new:
-            bufer_size_new = int(self.N_buffered/4) + N_new
-            append_buffer = np.zeros(bufer_size_new)
-            for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth'):
+            buffer_size_new = self.buffer_size + int(self.N_buffered/4) + N_new
+
+            for attr in self.attrs:
                 # self.* = np.concatenate((self.*, append_buffer))
-                setattr(self, attr, np.concatenate((getattr(self, attr), append_buffer)))
+                getattr(self, attr).resize(buffer_size_new)
 
-            if hasattr(self, 'event'):
-                self.event = np.concatenate((self.event, np.full(bufer_size_new, False)))
-                self.event_index = np.concatenate((self.event_index, np.zeros(bufer_size_new, dtype=int)))
-            if hasattr(self, 'photon_delta'):
-                self.photon_delta = np.concatenate((self.photon_delta, append_buffer))
-            if hasattr(self, 'pair_delta'):
-                self.pair_delta = np.concatenate((self.pair_delta, append_buffer))
+            self._to_be_pruned[-(buffer_size_new-self.buffer_size):] = True
 
-            self._to_be_pruned = np.concatenate((self._to_be_pruned, np.full(bufer_size_new, True)))
-
-            if self.has_spin:
-                self.sx = np.concatenate((self.sx, append_buffer))
-                self.sy = np.concatenate((self.sy, append_buffer))
-                self.sz = np.concatenate((self.sz, append_buffer))
 
             # new buffer size
-            self.buffer_size += bufer_size_new
+            self.buffer_size = buffer_size_new
             
 
     def _prune(self):
         selected = ~self._to_be_pruned
         N = selected.sum()
-        for attr in ('x', 'y', 'z', 'ux', 'uy', 'uz', 'inv_gamma', 'Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz', 'chi', 'optical_depth', '_to_be_pruned'):
+        for attr in self.attrs:
             setattr(self, attr, (getattr(self, attr))[selected])
         self.buffer_size = N
         self.N_buffered = N
