@@ -66,6 +66,33 @@ def simple_laser_pulse(a0, w0, ctau, direction=1,  x0=0, wavelength=0.8e-6, pol_
 
     return Fields(_laser_pulse)
 
+def gaussian_laser_pulse(a0, w0, ctau, direction=1, x0=0.0, l0=0.8e-6, pol_angle=0.0, cep=0.0):
+    assert direction == 1 or direction == -1, "direction must be +1 (+x) or -1 (-x)"
+
+    omega0 = 2*pi*c/l0
+    k0 = 2*pi/l0
+    zR = pi*w0**2 / l0
+    a0_norm = e / (m_e * c * omega0)
+    def _gaussian_pulse(x, y, z, t):
+        r2 = y**2 + z**2
+        wx = w0 * np.sqrt(1 + (x/zR)**2)
+        Rx = x * (1 + (zR/x)**2)
+        gouy = np.arctan(x/zR)
+        
+        E0 = a0 / a0_norm
+        phi = k0 * (x - x0 - direction*c*t) + k0*r2/2/Rx - gouy
+        E = E0 * np.cos(phi+cep) * w0/wx * np.exp(-r2/wx**2) * np.exp(-phi**2/(k0*ctau)**2)
+        Ex = 0.0
+        Ey = E * np.cos(pol_angle)
+        Ez = E * np.sin(pol_angle)
+        
+        Bx = 0.0
+        By = -Ez / c * direction
+        Bz = Ey / c * direction
+        return (Ex, Ey, Ez, Bx, By, Bz)
+
+    return Fields(_gaussian_pulse)
+
 
 def static_field(Ex=0, Ey=0, Ez=0, Bx=0, By=0, Bz=0):
     @njit
