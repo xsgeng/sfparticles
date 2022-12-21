@@ -1,6 +1,6 @@
 [project]
 name = "sfparticles"
-version = "0.3"
+version = "0.3.2"
 dependencies = [
     "numpy",
     "numba",
