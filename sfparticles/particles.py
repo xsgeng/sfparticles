@@ -2,7 +2,7 @@ from enum import Enum, auto
 from typing import Tuple, Union
 import numpy as np
 from scipy.constants import c, m_e, e, hbar, epsilon_0, pi
-from numba import njit, prange, float64, int64, void, boolean
+from numba import njit, prange, float64, int64, void, boolean, uint64
 from .fields import Fields
 
 from .qed import _use_optical_depth
@@ -151,7 +151,7 @@ class Particles(object):
 
     @property
     def Npart(self):
-        return (~self._to_be_pruned).sum()
+        return bool_sum(~self._to_be_pruned)
 
     @property
     def gamma(self):
@@ -268,7 +268,7 @@ class Particles(object):
             return
 
         # events are already false when marked as pruned in QED
-        N_photon = self.event.sum()
+        N_photon = bool_sum(self.event)
         
         if hasattr(self, 'photon') and N_photon > 0:
             find_event_index(self.event, self.event_index, self.N_buffered)
@@ -288,7 +288,7 @@ class Particles(object):
             return
         
         # events are already false when marked as pruned in QED
-        N_pair = self.event.sum()
+        N_pair = bool_sum(self.event)
         
         if hasattr(self, 'bw_electron'):
             find_event_index(self.event, self.event_index, self.N_buffered)
@@ -334,7 +334,7 @@ class Particles(object):
 
     def _prune(self):
         selected = ~self._to_be_pruned
-        N = selected.sum()
+        N = bool_sum(selected)
         for attr in self.attrs:
             setattr(self, attr, (getattr(self, attr))[selected])
         self.buffer_size = N
@@ -608,6 +608,15 @@ def find_event_index(event, index, N):
             index[idx] = i
             idx += 1
             
+@njit(uint64(boolean[:]))
+def bool_sum(event):
+    ntotal = 0
+    for ip in prange(len(event)):
+        if event[ip]:
+            ntotal += 1
+
+    return ntotal
+
 
 @njit((void(boolean[:], float64[:], float64[:], float64, int64)), parallel=True)
 def pick_hard_photon(event, delta, inv_gamma, threshold, N):
