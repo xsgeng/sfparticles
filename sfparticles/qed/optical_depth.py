@@ -1,3 +1,4 @@
+print("Using optical depth method.")
 from numba import njit, prange, void, float64, boolean, int64
 from numpy import log, random 
 from .optical_depth_tables import \

@@ -2,11 +2,14 @@ from enum import Enum, auto
 from typing import Tuple, Union
 import numpy as np
 from scipy.constants import c, m_e, e, hbar, epsilon_0, pi
-from numba import njit, prange, guvectorize, float64, int64, void, boolean
+from numba import njit, prange, float64, int64, void, boolean
 from .fields import Fields
 
-from .qed import photon_from_rejection_sampling, pair_from_rejection_sampling, \
-    _use_optical_depth, update_tau_e, update_tau_gamma
+from .qed import _use_optical_depth
+if _use_optical_depth:
+    from .qed.optical_depth import update_tau_e, update_tau_gamma
+else:
+    from .qed.rejection_sampling import photon_from_rejection_sampling, pair_from_rejection_sampling
 
 class RadiationReactionType(Enum):
     """
