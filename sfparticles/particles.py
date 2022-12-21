@@ -26,9 +26,10 @@ class Particles(object):
     def __init__(
         self, name : str,
         q: int, m: float, N: int = 0,
-        has_spin = False,
-        RR : RadiationReactionType = RadiationReactionType.PHOTON,
         props : Tuple = None,
+        RR : RadiationReactionType = RadiationReactionType.PHOTON,
+        has_spin = False,
+        push = True,
     ) -> None:
         """
         ## 初始化粒子
@@ -39,26 +40,26 @@ class Particles(object):
             质量，以电子质量为单位
         `N` : int
             粒子数
-        `has_spin` : bool
-            是否包含自旋
+        `props` : Tuple(x, y, z, ux, uy, uz, [sx, sy, sz])
+            粒子的初始状态，可包含自旋矢量。如果`has_spin=True`且未给出sx, sy, sz，默认sz=1
+            这些属性向量的长度为buffer的长度，前N个为粒子的属性。
         `RR` : RadiationReactionType or None
             辐射反作用类型。对m=0光子无效。
                 `None` : 无RR
                 `RadiationReactionType.photon` : 光子产生辐射反作用
                 `RadiationReactionType.LL` : LL方程
                 `RadiationReactionType.cLL` : 量子修正的LL方程
-        `props` : Tuple(x, y, z, ux, uy, uz, [sx, sy, sz])
-            粒子的初始状态，可包含自旋矢量。如果`has_spin=True`且未给出sx, sy, sz，默认sz=1
-            这些属性向量的长度为buffer的长度，前N个为粒子的属性。
-        `photon`, `pair` : Particles
-            辐射光子和产生电子对的对象。
-            pair = (electron, positron)
+        `has_spin` : bool
+            是否包含自旋
+        `push` : Bool
+            是否模拟该粒子的运动, 默认True
         """
         self.name = name
         self.q = q * e
         self.m = m * m_e
         self.has_spin = has_spin
         self.RR = RR
+        self.push = push
         N = int(N)
 
         self.attrs = []
@@ -162,6 +163,7 @@ class Particles(object):
         assert self.RR != RadiationReactionType.LL and self.RR != RadiationReactionType.CLL, 'LL equation does not radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
+        self.radiating = True
         self.photon = photon.name
         self.event = np.full(self.buffer_size, False)
         self.event_index = np.zeros(self.buffer_size, dtype=int)
@@ -177,6 +179,7 @@ class Particles(object):
         assert isinstance(electron, Particles) and isinstance(positron, Particles), 'pair must be tuple or list of Particle class'
         assert electron.m == m_e and electron.q == -e, f'first of the pair must be electron'
         assert positron.m == m_e and positron.q ==  e, f'second of the pair must be positron'
+        self.bw = True
         self.bw_electron = electron.name
         self.bw_positron = positron.name
         self.event = np.full(self.buffer_size, False)

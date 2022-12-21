@@ -19,6 +19,9 @@ class Simulation(object):
         '''
         # TODO: check all inputs
         self.all_particles = all_particles
+        self.particles_push = []
+        self.particles_bw = []
+        self.particles_rad = []
         self.dt = dt
         self.fields = fields
         self.print_every = print_every
@@ -28,6 +31,14 @@ class Simulation(object):
         self.step = 0
 
         self.progress_bar = None
+
+        for p in all_particles:
+            if p.bw:
+                self.particles_bw.append(p)
+            if p.radiating:
+                self.particles_rad.append(p)
+            if p.push:
+                self.particles_push.append(p)
 
 
     def start(self, nstep, total=None):
@@ -43,7 +54,7 @@ class Simulation(object):
         tic = perf_counter_ns()
         for istep in range(self.step, self.step + nstep):
             # push particles
-            for particles in self.all_particles:
+            for particles in self.particles_push:
                 particles._eval_field(self.fields, self.t)
 
                 # from t = (i-0.5)*dt to t = (i+0.5)*dt
@@ -52,28 +63,28 @@ class Simulation(object):
                 particles._push_position(0.5*self.dt)
                 
             # QED
-            for particles in self.all_particles:
+            for particles in self.particles_bw:
                 particles._calculate_chi()
+                particles._pair_event(self.dt)
 
-                if hasattr(particles, 'bw_electron'):
-                    particles._pair_event(self.dt)
-                if hasattr(particles, 'photon'):
-                    particles._photon_event(self.dt)
-                    particles._pick_hard_photon(self.photon_threshold)
+            for particles in self.particles_rad:
+                particles._calculate_chi()
+                particles._photon_event(self.dt)
+                particles._pick_hard_photon(self.photon_threshold)
 
             # create particles
             # seperated from events generation
             # since particles created in the current loop do NOT further create particle
-            for particles in self.all_particles:
-                if hasattr(particles, 'photon_delta'):
-                    photon = particles_dict[particles.photon]
-                    particles._create_photon(photon)
-                if hasattr(particles, 'pair_delta'):
-                    bw_electron = particles_dict[particles.bw_electron]
-                    bw_positron = particles_dict[particles.bw_positron]
-                    particles._create_pair(bw_electron, bw_positron)
+            for particles in self.particles_rad:
+                photon = particles_dict[particles.photon]
+                particles._create_photon(photon)
 
-            for particles in self.all_particles:
+            for particles in self.particles_bw:
+                bw_electron = particles_dict[particles.bw_electron]
+                bw_positron = particles_dict[particles.bw_positron]
+                particles._create_pair(bw_electron, bw_positron)
+
+            for particles in self.particles_push:
                 # from t = (i+0.5)*dt to t = (i+1)*dt
                 particles._push_position(0.5*self.dt)
             
