@@ -4,6 +4,7 @@ from .particles import Particles, c
 from tqdm import tqdm
 
 
+from . import _use_gpu
 class Simulation(object):
     def __init__(self,
         *all_particles : Particles,
@@ -50,6 +51,10 @@ class Simulation(object):
                 self.progress_bar = tqdm(total=total, unit='step', smoothing=1)
 
         particles_dict = {p.name : p for p in self.all_particles}
+
+        if _use_gpu:
+            for p in self.all_particles:
+                p._to_gpu()
 
         tic = perf_counter_ns()
         for istep in range(self.step, self.step + nstep):
@@ -106,3 +111,5 @@ class Simulation(object):
 
         for particles in self.all_particles:
             particles._prune()
+            if _use_gpu:
+                particles._to_host()

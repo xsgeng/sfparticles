@@ -11,6 +11,14 @@ if _use_optical_depth:
 else:
     from .qed.rejection_sampling import photon_from_rejection_sampling, pair_from_rejection_sampling
 
+from . import _use_gpu
+if _use_gpu:
+    from numba import cuda
+    from cupy import resize
+    stream = cuda.stream()
+else:
+    from numpy import resize
+
 class RadiationReactionType(Enum):
     """
     `LL` : approximated Landau-Lifshitz equation for gamma >> 1
@@ -152,6 +160,16 @@ class Particles(object):
         self._to_be_pruned = np.full(N, False)
         self.attrs += ['_to_be_pruned']
 
+    def _to_gpu(self):
+        if _use_gpu:
+            for attr in self.attrs:
+                setattr(self, attr, cuda.to_device(getattr(self, attr)))
+        
+    def _to_host(self):
+        if _use_gpu:
+            for attr in self.attrs:
+                setattr(self, attr, (getattr(self, attr)).copy_to_host())
+        
     @property
     def Npart(self):
         return bool_sum(~self._to_be_pruned)
@@ -328,7 +346,7 @@ class Particles(object):
 
             for attr in self.attrs:
                 # self.* = np.concatenate((self.*, append_buffer))
-                getattr(self, attr).resize(buffer_size_new)
+                setattr(self, attr, resize(getattr(self, attr), buffer_size_new))
 
             self._to_be_pruned[-(buffer_size_new-self.buffer_size):] = True
 

@@ -4,6 +4,7 @@ from numba.core.registry import CPUDispatcher
 import numpy as np
 from scipy.constants import c, pi, e, m_e
 
+from . import _use_gpu
 class Fields(object):
     def __init__(self, field_func : Callable) -> None:
         
