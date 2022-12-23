@@ -60,6 +60,8 @@ class Particles(object):
         self.has_spin = has_spin
         self.RR = RR
         self.push = push
+        self.bw = False
+        self.radiating = False
         N = int(N)
 
         self.attrs = []
