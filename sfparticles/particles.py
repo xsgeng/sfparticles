@@ -14,11 +14,14 @@ else:
 from . import _use_gpu
 if _use_gpu:
     from numba import cuda
-    from cupy import resize
     stream = cuda.stream()
+    from cupy import resize
+    from .gpu import push_position, boris, LL_push, update_chi, bool_sum, pick_hard_photon, photon_recoil, create_pair, create_photon
 else:
     from numpy import resize
+    from .cpu import push_position, boris, LL_push, update_chi, bool_sum, pick_hard_photon, photon_recoil, create_pair, create_photon
 
+from .cpu import find_event_index
 class RadiationReactionType(Enum):
     """
     `LL` : approximated Landau-Lifshitz equation for gamma >> 1
@@ -172,7 +175,7 @@ class Particles(object):
         
     @property
     def Npart(self):
-        return bool_sum(~self._to_be_pruned)
+        return self.buffer_size - bool_sum(self._to_be_pruned)
 
     @property
     def gamma(self):
@@ -212,23 +215,13 @@ class Particles(object):
         
     def _push_momentum(self, dt):
         if self.m > 0:
-            if self.has_spin:
-                boris_tbmt(
-                    self.ux, self.uy, self.uz,
-                    self.sx, self.sy, self.sz,
-                    self.inv_gamma,
-                    self.Ex, self.Ey, self.Ez, 
-                    self.Bx, self.By, self.Bz,
-                    self.q, self.N_buffered, self._to_be_pruned, dt
-                )
-            else:
-                boris(
-                    self.ux, self.uy, self.uz,
-                    self.inv_gamma,
-                    self.Ex, self.Ey, self.Ez, 
-                    self.Bx, self.By, self.Bz,
-                    self.q, self.N_buffered, self._to_be_pruned, dt
-                )
+            boris(
+                self.ux, self.uy, self.uz,
+                self.inv_gamma,
+                self.Ex, self.Ey, self.Ez, 
+                self.Bx, self.By, self.Bz,
+                self.q, self.N_buffered, self._to_be_pruned, dt
+            )
             if self.RR == RadiationReactionType.LL:
                 LL_push(
                     self.ux, self.uy, self.uz, 
@@ -247,11 +240,20 @@ class Particles(object):
 
 
     def _eval_field(self, fields : Fields, t):
-        fields.field_func(
-            self.x, self.y, self.z, t, self.N_buffered, self._to_be_pruned,
-            self.Ex, self.Ey, self.Ez, 
-            self.Bx, self.By, self.Bz
-        )
+        if _use_gpu:
+            from .gpu import tpb
+            bpg = int(self.N_buffered / tpb) + 1
+            fields.field_func[bpg, tpb](
+                self.x, self.y, self.z, t, self.N_buffered, self._to_be_pruned,
+                self.Ex, self.Ey, self.Ez, 
+                self.Bx, self.By, self.Bz
+            )
+        else:
+            fields.field_func(
+                self.x, self.y, self.z, t, self.N_buffered, self._to_be_pruned,
+                self.Ex, self.Ey, self.Ez, 
+                self.Bx, self.By, self.Bz
+            )
 
 
     def _calculate_chi(self):
@@ -356,294 +358,12 @@ class Particles(object):
             
 
     def _prune(self):
+        '''
+        call after copy to host if use gpu.
+        '''
         selected = ~self._to_be_pruned
-        N = bool_sum(selected)
         for attr in self.attrs:
             setattr(self, attr, (getattr(self, attr))[selected])
+        N = self.Npart
         self.buffer_size = N
         self.N_buffered = N
-
-
-@njit(void(*[float64[:]]*7, int64, boolean[:], float64), parallel=True, cache=False)
-def push_position( x, y, z, ux, uy, uz, inv_gamma, N, to_be_pruned, dt ):
-    """
-    Advance the particles' positions over `dt` using the momenta `ux`, `uy`, `uz`,
-    """
-    # Timestep, multiplied by c
-    cdt = c*dt
-
-    # Particle push (in parallel if threading is installed)
-    for ip in prange(N) :
-        if to_be_pruned[ip]:
-            continue
-        x[ip] += cdt * inv_gamma[ip] * ux[ip]
-        y[ip] += cdt * inv_gamma[ip] * uy[ip]
-        z[ip] += cdt * inv_gamma[ip] * uz[ip]
-
-
-@njit(void(*[float64[:]]*10, float64, int64, boolean[:], float64), parallel=True, cache=False)
-def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
-    """
-    Advance the particles' momenta, using numba
-    """
-    efactor = q*dt/(2*m_e*c)
-    bfactor = q*dt/(2*m_e)
-
-    for ip in prange(N):
-        if to_be_pruned[ip]:
-            continue
-        # E field
-        ux_minus = ux[ip] + efactor * Ex[ip]
-        uy_minus = uy[ip] + efactor * Ey[ip]
-        uz_minus = uz[ip] + efactor * Ez[ip]
-        # B field
-        inv_gamma_minus = 1 / np.sqrt(1 + ux_minus**2 + uy_minus**2 + uz_minus**2)
-        Tx = bfactor * Bx[ip] * inv_gamma_minus
-        Ty = bfactor * By[ip] * inv_gamma_minus
-        Tz = bfactor * Bz[ip] * inv_gamma_minus
-        
-        ux_prime = ux_minus + uy_minus * Tz - uz_minus * Ty
-        uy_prime = uy_minus + uz_minus * Tx - ux_minus * Tz
-        uz_prime = uz_minus + ux_minus * Ty - uy_minus * Tx
-
-        Tfactor = 2 / (1 + Tx**2 + Ty**2 + Tz**2)
-        Sx = Tfactor * Tx
-        Sy = Tfactor * Ty
-        Sz = Tfactor * Tz
-
-        ux_plus = ux_minus + uy_prime * Sz - uz_prime * Sy
-        uy_plus = uy_minus + uz_prime * Sx - ux_prime * Sz
-        uz_plus = uz_minus + ux_prime * Sy - uy_prime * Sx
-
-        ux[ip] = ux_plus + efactor * Ex[ip]
-        uy[ip] = uy_plus + efactor * Ey[ip]
-        uz[ip] = uz_plus + efactor * Ez[ip]
-        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
-    
-
-# TODO
-@njit(parallel=True, cache=False)
-def boris_tbmt( ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
-    """
-    Advance the particles' momenta, using numba
-    """
-    efactor = q*dt/(2*m_e*c)
-    bfactor = q*dt/(2*m_e)
-
-    for ip in prange(N):
-        if to_be_pruned[ip]:
-            continue
-        # E field
-        ux_minus = ux[ip] + efactor * Ex[ip]
-        uy_minus = uy[ip] + efactor * Ey[ip]
-        uz_minus = uz[ip] + efactor * Ez[ip]
-        # B field
-        inv_gamma_minus = 1 / np.sqrt(1 + ux_minus**2 + uy_minus**2 + uz_minus**2)
-        Tx = bfactor * Bx[ip] * inv_gamma_minus
-        Ty = bfactor * By[ip] * inv_gamma_minus
-        Tz = bfactor * Bz[ip] * inv_gamma_minus
-        
-        ux_prime = ux_minus + uy_minus * Tz - uz_minus * Ty
-        uy_prime = uy_minus + uz_minus * Tx - ux_minus * Tz
-        uz_prime = uz_minus + ux_minus * Ty - uy_minus * Tx
-
-        Tfactor = 2 / (1 + Tx**2 + Ty**2 + Tz**2)
-        Sx = Tfactor * Tx
-        Sy = Tfactor * Ty
-        Sz = Tfactor * Tz
-
-        ux_plus = ux_minus + uy_prime * Sz - uz_prime * Sy
-        uy_plus = uy_minus + uz_prime * Sx - ux_prime * Sz
-        uz_plus = uz_minus + ux_prime * Sy - uy_prime * Sx
-
-        ux[ip] = ux_plus + efactor * Ex[ip]
-        uy[ip] = uy_plus + efactor * Ey[ip]
-        uz[ip] = uz_plus + efactor * Ez[ip]
-        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
-
-        # TBMT
-        ...
-    
-
-def vay( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ):
-    """
-    Push at single macroparticle, using the Vay pusher
-    """
-    # Set a few constants
-    econst = q*dt/(m_e*c)
-    bconst = 0.5*q*dt/m_e
-
-    for ip in prange(N):
-        if to_be_pruned[ip]:
-            continue
-        # Get the magnetic rotation vector
-        taux = bconst*Bx[ip]
-        tauy = bconst*By[ip]
-        tauz = bconst*Bz[ip]
-        tau2 = taux**2 + tauy**2 + tauz**2
-
-        # Get the momenta at the half timestep
-        uxp = ux[ip] + econst*Ex[ip] \
-        + inv_gamma[ip] *( uy[ip]*tauz - uz[ip]*tauy )
-        uyp = uy[ip] + econst*Ey[ip] \
-        + inv_gamma[ip] *( uz[ip]*taux - ux[ip]*tauz )
-        uzp = uz[ip] + econst*Ez[ip] \
-        + inv_gamma[ip] *( ux[ip]*tauy - uy[ip]*taux )
-        sigma = 1 + uxp**2 + uyp**2 + uzp**2 - tau2
-        utau = uxp*taux + uyp*tauy + uzp*tauz
-
-        # Get the new 1./gamma
-        inv_gamma_f = np.sqrt(
-            2./( sigma + np.sqrt( sigma**2 + 4*(tau2 + utau**2 ) ) ) )
-
-        # Reuse the tau and utau arrays to save memory
-        tx = inv_gamma_f*taux
-        ty = inv_gamma_f*tauy
-        tz = inv_gamma_f*tauz
-        ut = inv_gamma_f*utau
-        s = 1./( 1 + tau2*inv_gamma_f**2 )
-
-        # Get the new u
-        ux[ip] = s*( uxp + tx*ut + uyp*tz - uzp*ty )
-        uy[ip] = s*( uyp + ty*ut + uzp*tx - uxp*tz )
-        uz[ip] = s*( uzp + tz*ut + uxp*ty - uyp*tx )
-        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
-
-
-@njit(void(*[float64[:]]*5, int64, boolean[:], float64), parallel=True, cache=False)
-def LL_push( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ) :
-    factor = -2/3 / (4*pi*epsilon_0) * e**2 * m_e * c / hbar**2 * dt
-    for ip in prange(N):
-        if to_be_pruned[ip]:
-            continue
-        
-        ux[ip] += factor * chi_e[ip]**2 * ux[ip]*inv_gamma[ip]
-        uy[ip] += factor * chi_e[ip]**2 * uy[ip]*inv_gamma[ip]
-        uz[ip] += factor * chi_e[ip]**2 * uz[ip]*inv_gamma[ip]
-        inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
-    
-
-@njit(void(*[float64[:]]*11, int64, boolean[:]), parallel=True, cache=False)
-def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
-    factor = e*hbar / (m_e**2 * c**3)
-    for ip in prange(N):
-        if to_be_pruned[ip]:
-            continue
-        gamma = 1.0 / inv_gamma[ip]
-        chi_e[ip] = factor * np.sqrt(
-            (gamma*Ex[ip] + (uy[ip]*Bz[ip] - uz[ip]*By[ip])*c)**2 +
-            (gamma*Ey[ip] + (uz[ip]*Bx[ip] - ux[ip]*Bz[ip])*c)**2 +
-            (gamma*Ez[ip] + (ux[ip]*By[ip] - uy[ip]*Bx[ip])*c)**2 -
-            (ux[ip]*Ex[ip] + uy[ip]*Ey[ip] + uz[ip]*Ez[ip])**2
-        )
-
-
-@njit(void(*[float64[:]]*4, boolean[:], float64[:], int64, boolean[:]), parallel=True, cache=False)
-def photon_recoil(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
-    for ip in prange(N):
-        if to_be_pruned[ip]:
-            continue
-        if event[ip]:
-            ux[ip] *= 1 - photon_delta[ip]
-            uy[ip] *= 1 - photon_delta[ip]
-            uz[ip] *= 1 - photon_delta[ip]
-            inv_gamma[ip] = 1 / np.sqrt(1 + ux[ip]**2 + uy[ip]**2 + uz[ip]**2)
-        
-
-@njit(
-    void(
-        *[float64[:]]*12, 
-        float64[:], boolean[:], 
-        int64[:], float64[:], int64, int64,
-    ), 
-    parallel=True, cache=False
-)
-def create_photon(
-    x_src, y_src, z_src, ux_src, uy_src, uz_src,
-    x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
-    inv_gamma_dst, photon_to_be_pruned,
-    event_index, photon_delta, N_buffered, N_photon,
-):
-    for ip in prange(N_photon):
-        idx_src = event_index[ip]
-        idx_dst = N_buffered+ip
-        x_dst[idx_dst] = x_src[idx_src]
-        y_dst[idx_dst] = y_src[idx_src]
-        z_dst[idx_dst] = z_src[idx_src]
-        
-        ux_dst[idx_dst] = photon_delta[idx_src] * ux_src[idx_src]
-        uy_dst[idx_dst] = photon_delta[idx_src] * uy_src[idx_src]
-        uz_dst[idx_dst] = photon_delta[idx_src] * uz_src[idx_src]
-        
-        inv_gamma_dst[idx_dst] = 1.0 / np.sqrt(ux_dst[idx_dst]**2 + uy_dst[idx_dst]**2 + uz_dst[idx_dst]**2)
-        # mark created photon as existing
-        photon_to_be_pruned[idx_dst] = False
-        
-
-@njit(
-    void(
-        *[float64[:]]*6, 
-        boolean[:], 
-        *[float64[:]]*6, 
-        float64[:], boolean[:], 
-        int64[:], float64[:], int64, int64,
-        boolean,
-    ), 
-    parallel=True, cache=False
-)
-def create_pair(
-    x_src, y_src, z_src, ux_src, uy_src, uz_src,
-    photon_to_be_pruned,
-    x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
-    inv_gamma_dst, pair_to_be_pruned,
-    event_index, pair_delta, N_buffered, N_pair,
-    inverse_delta,
-):
-    for ip in prange(N_pair):
-        idx_src = event_index[ip]
-        idx_dst = N_buffered+ip
-        x_dst[idx_dst] = x_src[idx_src]
-        y_dst[idx_dst] = y_src[idx_src]
-        z_dst[idx_dst] = z_src[idx_src]
-        
-        delta = pair_delta[idx_src]
-        if inverse_delta: 
-            delta = 1.0 - delta
-        
-        ux_dst[idx_dst] = delta * ux_src[idx_src]
-        uy_dst[idx_dst] = delta * uy_src[idx_src]
-        uz_dst[idx_dst] = delta * uz_src[idx_src]
-        
-        # TODO spin
-        
-        inv_gamma_dst[idx_dst] = 1.0 / np.sqrt(1.0 + ux_dst[idx_dst]**2 + uy_dst[idx_dst]**2 + uz_dst[idx_dst]**2)
-        # mark created pair as existing
-        pair_to_be_pruned[idx_dst] = False
-        # mark created pair as deleted
-        photon_to_be_pruned[idx_src] = True
-        
-
-@njit(void(boolean[:], int64[:], int64))
-def find_event_index(event, index, N):
-    idx = 0
-    for i in range(N):
-        if event[i]:
-            index[idx] = i
-            idx += 1
-            
-@njit(uint64(boolean[:]))
-def bool_sum(event):
-    ntotal = 0
-    for ip in prange(len(event)):
-        if event[ip]:
-            ntotal += 1
-
-    return ntotal
-
-
-@njit((void(boolean[:], float64[:], float64[:], float64, int64)), parallel=True)
-def pick_hard_photon(event, delta, inv_gamma, threshold, N):
-    for ip in prange(N):
-        if event[ip]:
-            if delta[ip] / inv_gamma[ip] < threshold:
-                event[ip] = False

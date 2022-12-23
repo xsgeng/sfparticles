@@ -1,36 +1,48 @@
 from typing import Callable
-from numba import njit, prange, vectorize
+from numba import njit, prange
 from numba.core.registry import CPUDispatcher
-import numpy as np
 from scipy.constants import c, pi, e, m_e
+from math import sin, cos, exp, atan, sqrt
 
 from . import _use_gpu
+if _use_gpu:
+    from numba import cuda
+    from numba.cuda.dispatcher import CUDADispatcher
 class Fields(object):
     def __init__(self, field_func : Callable) -> None:
         
-        if isinstance(field_func, CPUDispatcher):
-            field_func_numba = field_func
+        if _use_gpu:
+            if isinstance(field_func, CUDADispatcher):
+                field_func_inline = field_func
+            else:
+                field_func_inline = cuda.jit(field_func)
+                @cuda.jit
+                def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
+                    ip = cuda.grid(1)
+                    if ip < N and ~to_be_pruned[ip]:
+                        Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip] = field_func_inline(x[ip], y[ip], z[ip], t)
         else:
-            field_func_numba = njit(field_func, cache=False)
+            if isinstance(field_func, CPUDispatcher):
+                field_func_inline = field_func
+            else:
+                field_func_inline = njit(field_func, cache=False)
+                @njit(parallel=True, cache=False)
+                def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
+                    for ip in prange(N):
+                        if to_be_pruned[ip]:
+                            continue
+                        Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip] = field_func_inline(x[ip], y[ip], z[ip], t)
 
-        self.field_func_numba = field_func_numba
-        @njit(parallel=True, cache=False)
-        def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
-            for ip in prange(N):
-                if to_be_pruned[ip]:
-                    continue
-                Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip] = field_func_numba(x[ip], y[ip], z[ip], t)
-
+        self.field_func_inline = field_func_inline
         self.field_func = field_function
 
     def __add__(self, other):
-        field_func_numba1 = self.field_func_numba
-        field_func_numba2 = other.field_func_numba
+        field_func_inline1 = self.field_func_inline
+        field_func_inline2 = other.field_func_inline
 
-        @njit
         def out(x, y, z, t):
-            Ex1, Ey1, Ez1, Bx1, By1, Bz1 = field_func_numba1(x, y, z, t)
-            Ex2, Ey2, Ez2, Bx2, By2, Bz2 = field_func_numba2(x, y, z, t)
+            Ex1, Ey1, Ez1, Bx1, By1, Bz1 = field_func_inline1(x, y, z, t)
+            Ex2, Ey2, Ez2, Bx2, By2, Bz2 = field_func_inline2(x, y, z, t)
             return (Ex1+Ex2, Ey1+Ey2, Ez1+Ez2, Bx1+Bx2, By1+By2, Bz1+Bz2)
 
         return Fields(out)
@@ -49,15 +61,14 @@ def simple_laser_pulse(a0, w0, ctau, direction=1,  x0=0, wavelength=0.8e-6, pol_
     a0_norm = e / (m_e * c * omega0)
     E0 = a0 / a0_norm
 
-    @njit
     def _laser_pulse(x, y, z, t):
         r2 = y**2 + z**2
         phi = k0*(x-x0 - direction*c*t)
 
-        E = E0 * np.cos(phi + cep) * np.exp(-r2/w0**2) * np.exp(-phi**2 / (k0*ctau)**2)
+        E = E0 * cos(phi + cep) * exp(-r2/w0**2) * exp(-phi**2 / (k0*ctau)**2)
         Ex = 0.0
-        Ey = E * np.cos(pol_angle)
-        Ez = E * np.sin(pol_angle)
+        Ey = E * cos(pol_angle)
+        Ez = E * sin(pol_angle)
         
         Bx = 0.0
         By = -Ez / c * direction
@@ -76,16 +87,16 @@ def gaussian_laser_pulse(a0, w0, ctau, direction=1, x0=0.0, l0=0.8e-6, pol_angle
     a0_norm = e / (m_e * c * omega0)
     def _gaussian_pulse(x, y, z, t):
         r2 = y**2 + z**2
-        wx = w0 * np.sqrt(1 + (x/zR)**2)
+        wx = w0 * sqrt(1 + (x/zR)**2)
         Rx = x * (1 + (zR/x)**2)
-        gouy = np.arctan(x/zR)
+        gouy = atan(x/zR)
         
         E0 = a0 / a0_norm
         phi = k0 * (x - x0 - direction*c*t) + k0*r2/2/Rx - gouy
-        E = E0 * np.cos(phi+cep) * w0/wx * np.exp(-r2/wx**2) * np.exp(-phi**2/(k0*ctau)**2)
+        E = E0 * cos(phi+cep) * w0/wx * exp(-r2/wx**2) * exp(-phi**2/(k0*ctau)**2)
         Ex = 0.0
-        Ey = E * np.cos(pol_angle)
-        Ez = E * np.sin(pol_angle)
+        Ey = E * cos(pol_angle)
+        Ez = E * sin(pol_angle)
         
         Bx = 0.0
         By = -Ez / c * direction
@@ -96,7 +107,6 @@ def gaussian_laser_pulse(a0, w0, ctau, direction=1, x0=0.0, l0=0.8e-6, pol_angle
 
 
 def static_field(Ex=0, Ey=0, Ez=0, Bx=0, By=0, Bz=0):
-    @njit
     def _static_field(x, y, z, t):
         return (Ex, Ey, Ez, Bx, By, Bz)
     return Fields(_static_field)

@@ -110,6 +110,6 @@ class Simulation(object):
                 
 
         for particles in self.all_particles:
-            particles._prune()
             if _use_gpu:
                 particles._to_host()
+            particles._prune()
