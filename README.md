@@ -27,10 +27,15 @@ pip install --user git+http://172.16.95.131/gengxs/sfparticles.git
 ```bash
 SFPARTICLES_OPTICAL_DEPTH=1 NUMBA_NUM_THREADS=20 python example/cascade.py
 ```
-### GPU加速
-设置环境变量`SFPARTICLES_USE_GPU=1`。
-```bash
-SFPARTICLES_USE_GPU=1 python example/cascade.py
-# slurm
-SFPARTICLES_USE_GPU=1 srun -p gpu -G 1 -u python example/cascade.py
-```
+## 使用GPU加速
+- 安装CUDA
+    
+    ```bash
+    conda install -c conda-forge cupy cudatoolkit=11.2
+    ```
+- 设置环境变量`SFPARTICLES_USE_GPU=1`。
+    ```bash
+    SFPARTICLES_USE_GPU=1 python example/cascade.py
+    # slurm
+    SFPARTICLES_USE_GPU=1 srun -p gpu -G 1 -u python example/cascade.py
+    ```
