@@ -1,7 +1,10 @@
 from numba import njit, prange, void, float64, boolean, int64
 from numpy import random
 from .rejection_sampling_tables import photon_prob_rate_from_table, pair_prob_rate_from_table, _int_Ai_table, _Aip_table
-from ..import _use_gpu
+
+# TODO: inline core functions
+
+from ..gpu import _use_gpu
 if _use_gpu:
     from numba import cuda
     from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float64
@@ -25,7 +28,6 @@ if _use_gpu:
 
             # modified event generator by Gonoskov 2015
             prob_rate = 3*r1**2 * photon_prob_rate_from_table(chi_e[ip], r1**3, int_Ai_table, Aip_table) * dtau
-            # prob_rate = 3*r1**2 * xoroshiro128p_uniform_float64(gen, ip%(tpb*5120)) * dtau
             if r2 < prob_rate:
                 delta[ip] = r1**3
                 event[ip] = True
@@ -49,7 +51,6 @@ if _use_gpu:
             dtau = dt * inv_gamma[ip]
 
             prob_rate = pair_prob_rate_from_table(chi_gamma[ip], r1, int_Ai_table, Aip_table) * dtau
-            # prob_rate = 3*r1**2 * xoroshiro128p_uniform_float64(gen, ip%(tpb*5120)) * dtau
             if r2 < prob_rate:
                 delta[ip] = r1
                 event[ip] = True

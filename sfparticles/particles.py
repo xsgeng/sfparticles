@@ -2,7 +2,6 @@ from enum import Enum, auto
 from typing import Tuple, Union
 import numpy as np
 from scipy.constants import c, m_e, e, hbar, epsilon_0, pi
-from numba import njit, prange, float64, int64, void, boolean, uint64
 from .fields import Fields
 
 from .qed import _use_optical_depth
@@ -11,14 +10,18 @@ if _use_optical_depth:
 else:
     from .qed.rejection_sampling import photon_from_rejection_sampling, pair_from_rejection_sampling
 
-from . import _use_gpu
+from .gpu import _use_gpu
 if _use_gpu:
     import cupy as cp
     from cupy import resize
-    from .gpu import push_position, boris, LL_push, update_chi, pick_hard_photon, photon_recoil, create_pair, create_photon, find_event_index
+    from .gpu import push_position, boris, LL_push, update_chi, \
+        pick_hard_photon, photon_recoil, create_pair, create_photon, \
+        find_event_index, bool_sum
 else:
     from numpy import resize
-    from .cpu import push_position, boris, LL_push, update_chi, pick_hard_photon, photon_recoil, create_pair, create_photon, find_event_index
+    from .cpu import push_position, boris, LL_push, update_chi, \
+        pick_hard_photon, photon_recoil, create_pair, create_photon, \
+        find_event_index, bool_sum
 
 class RadiationReactionType(Enum):
     """
@@ -173,7 +176,7 @@ class Particles(object):
         
     @property
     def Npart(self):
-        return self.buffer_size - int(self._to_be_pruned.sum())
+        return self.buffer_size - int(bool_sum(self._to_be_pruned))
 
     @property
     def gamma(self):
@@ -285,12 +288,12 @@ class Particles(object):
         
         
     def _create_photon(self, pho):
-        if not self.event.any():
+        N_photon = int(bool_sum(self.event))
+        if N_photon == 0:
             return
 
         
         if hasattr(self, 'photon'):
-            N_photon = int(self.event.sum())
             pho._extend(N_photon)
 
             # events are already false when marked as pruned in QED
@@ -306,16 +309,16 @@ class Particles(object):
         
 
     def _create_pair(self, ele, pos):
-        if not self.event.any():
+        N_pair = int(bool_sum(self.event))
+        if N_pair == 0:
             return
         
         
         if hasattr(self, 'bw_electron'):
-            # events are already false when marked as pruned in QED
-            N_pair = int(self.event.sum())
             ele._extend(N_pair)
             pos._extend(N_pair)
             
+            # events are already false when marked as pruned in QED
             event_index = find_event_index(self.event)
             create_pair(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,

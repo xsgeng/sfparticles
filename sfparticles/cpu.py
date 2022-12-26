@@ -153,7 +153,7 @@ def find_event_index(event):
 @njit(int64(boolean[:]))
 def bool_sum(event):
     ntotal = 0
-    for ip in prange(len(event)):
+    for ip in prange(event.size):
         if event[ip]:
             ntotal += 1
 

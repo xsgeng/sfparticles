@@ -7,7 +7,7 @@ import warnings
 from numba.core.errors import NumbaPerformanceWarning
 warnings.filterwarnings('ignore', category=NumbaPerformanceWarning)
 
-from . import _use_gpu
+from .gpu import _use_gpu
 class Simulation(object):
     def __init__(self,
         *all_particles : Particles,

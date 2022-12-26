@@ -4,7 +4,7 @@ from numba.core.registry import CPUDispatcher
 from scipy.constants import c, pi, e, m_e
 from math import sin, cos, exp, atan, sqrt
 
-from . import _use_gpu
+from .gpu import _use_gpu
 if _use_gpu:
     from numba import cuda
     from numba.cuda.dispatcher import CUDADispatcher
