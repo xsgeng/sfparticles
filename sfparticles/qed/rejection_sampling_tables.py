@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 from numba import njit, cfunc
-import math
+from math import sqrt, floor
 from scipy.constants import alpha, pi, m_e, hbar, c
 from scipy.special import airy
 from scipy.integrate import quad
@@ -29,8 +29,7 @@ if os.path.exists(table_path) and __name__ == "sfparticles.qed.rejection_samplin
 '''
 Rejection_sampling
 '''
-@njit
-def photon_prob_rate_from_table(chi_e, delta):
+def photon_prob_rate_from_table(chi_e, delta, int_Ai_table, Aip_table):
     chi_gamma = delta * chi_e
     chi_ep = chi_e - chi_gamma
     z = (chi_gamma/chi_e/chi_ep)**(2/3)
@@ -41,21 +40,20 @@ def photon_prob_rate_from_table(chi_e, delta):
     if z > _z_range[1]:
         idx = _z_N - 1
     if _z_range[0] <= z <= _z_range[1]:
-        idx = math.floor((z - _z_range[0]) / _z_delta)
+        idx = int((z - _z_range[0]) / _z_delta)
     # linear interp
     z_left = _z_range[0] + idx * _z_delta
 
-    k = (_int_Ai_table[idx+1] - _int_Ai_table[idx]) / _z_delta
-    int_Ai_ = _int_Ai_table[idx] + k * (z - z_left)
+    k = (int_Ai_table[idx+1] - int_Ai_table[idx]) / _z_delta
+    int_Ai_ = int_Ai_table[idx] + k * (z - z_left)
 
-    k = (_Aip_table[idx+1] - _Aip_table[idx]) / _z_delta
-    Aip_ = _Aip_table[idx] + k * (z - z_left)
+    k = (Aip_table[idx+1] - Aip_table[idx]) / _z_delta
+    Aip_ = Aip_table[idx] + k * (z - z_left)
     
-    return factor*(int_Ai_ + (2.0/z + chi_gamma*np.sqrt(z)) * Aip_)
+    return factor*(int_Ai_ + (2.0/z + chi_gamma*sqrt(z)) * Aip_)
 
 
-@njit
-def pair_prob_rate_from_table(chi_gamma, delta):
+def pair_prob_rate_from_table(chi_gamma, delta, int_Ai_table, Aip_table):
     chi_e = delta * chi_gamma
     chi_ep = chi_gamma - chi_e
     z = (chi_gamma/chi_e/chi_ep)**(2/3)
@@ -66,18 +64,18 @@ def pair_prob_rate_from_table(chi_gamma, delta):
     if z > _z_range[1]:
         return 0.0
     if _z_range[0] <= z <= _z_range[1]:
-        idx = math.floor((z - _z_range[0]) / _z_delta)
+        idx = int((z - _z_range[0]) / _z_delta)
     # linear interp
     z_left = _z_range[0] + idx * _z_delta
 
-    k = (_int_Ai_table[idx+1] - _int_Ai_table[idx]) / _z_delta
-    int_Ai_ = _int_Ai_table[idx] + k * (z - z_left)
+    k = (int_Ai_table[idx+1] - int_Ai_table[idx]) / _z_delta
+    int_Ai_ = int_Ai_table[idx] + k * (z - z_left)
 
-    k = (_Aip_table[idx+1] - _Aip_table[idx]) / _z_delta
-    Aip_ = _Aip_table[idx] + k * (z - z_left)
+    k = (Aip_table[idx+1] - Aip_table[idx]) / _z_delta
+    Aip_ = Aip_table[idx] + k * (z - z_left)
     
     # - for pair
-    return factor*(int_Ai_ + (2.0/z - chi_gamma*np.sqrt(z)) * Aip_)
+    return factor*(int_Ai_ + (2.0/z - chi_gamma*sqrt(z)) * Aip_)
 
 def Ai(z):
     return airy(z)[0]

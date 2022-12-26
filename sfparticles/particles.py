@@ -13,15 +13,13 @@ else:
 
 from . import _use_gpu
 if _use_gpu:
-    from numba import cuda
-    stream = cuda.stream()
+    import cupy as cp
     from cupy import resize
-    from .gpu import push_position, boris, LL_push, update_chi, bool_sum, pick_hard_photon, photon_recoil, create_pair, create_photon
+    from .gpu import push_position, boris, LL_push, update_chi, pick_hard_photon, photon_recoil, create_pair, create_photon, find_event_index
 else:
     from numpy import resize
-    from .cpu import push_position, boris, LL_push, update_chi, bool_sum, pick_hard_photon, photon_recoil, create_pair, create_photon
+    from .cpu import push_position, boris, LL_push, update_chi, pick_hard_photon, photon_recoil, create_pair, create_photon, find_event_index
 
-from .cpu import find_event_index
 class RadiationReactionType(Enum):
     """
     `LL` : approximated Landau-Lifshitz equation for gamma >> 1
@@ -166,16 +164,16 @@ class Particles(object):
     def _to_gpu(self):
         if _use_gpu:
             for attr in self.attrs:
-                setattr(self, attr, cuda.to_device(getattr(self, attr)))
+                setattr(self, attr, cp.asarray(getattr(self, attr)))
         
     def _to_host(self):
         if _use_gpu:
             for attr in self.attrs:
-                setattr(self, attr, (getattr(self, attr)).copy_to_host())
+                setattr(self, attr, getattr(self, attr).get())
         
     @property
     def Npart(self):
-        return self.buffer_size - bool_sum(self._to_be_pruned)
+        return self.buffer_size - int(self._to_be_pruned.sum())
 
     @property
     def gamma(self):
@@ -189,9 +187,8 @@ class Particles(object):
         self.radiating = True
         self.photon = photon.name
         self.event = np.full(self.buffer_size, False)
-        self.event_index = np.zeros(self.buffer_size, dtype=int)
         self.photon_delta = np.zeros(self.buffer_size)
-        self.attrs += ["event", "event_index", "photon_delta"]
+        self.attrs += ["event", "photon_delta"]
         if _use_optical_depth:
             self.tau = np.zeros(self.buffer_size)
             self.attrs += ['tau']
@@ -206,9 +203,8 @@ class Particles(object):
         self.bw_electron = electron.name
         self.bw_positron = positron.name
         self.event = np.full(self.buffer_size, False)
-        self.event_index = np.zeros(self.buffer_size, dtype=int)
         self.pair_delta = np.zeros(self.buffer_size)
-        self.attrs += ["event", "event_index", "pair_delta"]
+        self.attrs += ["event", "pair_delta"]
         if _use_optical_depth:
             self.tau = np.zeros(self.buffer_size)
             self.attrs += ['tau']
@@ -292,17 +288,18 @@ class Particles(object):
         if not self.event.any():
             return
 
-        # events are already false when marked as pruned in QED
-        N_photon = bool_sum(self.event)
         
-        if hasattr(self, 'photon') and N_photon > 0:
-            find_event_index(self.event, self.event_index, self.N_buffered)
+        if hasattr(self, 'photon'):
+            N_photon = int(self.event.sum())
             pho._extend(N_photon)
+
+            # events are already false when marked as pruned in QED
+            event_index = find_event_index(self.event)
             create_photon(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
                 pho.x, pho.y, pho.z, pho.ux, pho.uy, pho.uz,
                 pho.inv_gamma, pho._to_be_pruned,
-                self.event_index, self.photon_delta, pho.N_buffered, N_photon,
+                event_index, self.photon_delta, pho.N_buffered, N_photon,
             )
             
             pho.N_buffered += N_photon
@@ -312,20 +309,20 @@ class Particles(object):
         if not self.event.any():
             return
         
-        # events are already false when marked as pruned in QED
-        N_pair = bool_sum(self.event)
         
         if hasattr(self, 'bw_electron'):
-            find_event_index(self.event, self.event_index, self.N_buffered)
+            # events are already false when marked as pruned in QED
+            N_pair = int(self.event.sum())
             ele._extend(N_pair)
             pos._extend(N_pair)
             
+            event_index = find_event_index(self.event)
             create_pair(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
                 self._to_be_pruned,
                 ele.x, ele.y, ele.z, ele.ux, ele.uy, ele.uz,
                 ele.inv_gamma, ele._to_be_pruned,
-                self.event_index, self.pair_delta, ele.N_buffered, N_pair,
+                event_index, self.pair_delta, ele.N_buffered, N_pair,
                 inverse_delta=False,
             )
             create_pair(
@@ -333,7 +330,7 @@ class Particles(object):
                 self._to_be_pruned,
                 pos.x, pos.y, pos.z, pos.ux, pos.uy, pos.uz,
                 pos.inv_gamma, pos._to_be_pruned,
-                self.event_index, self.pair_delta, pos.N_buffered, N_pair,
+                event_index, self.pair_delta, pos.N_buffered, N_pair,
                 inverse_delta=True,
             )
             

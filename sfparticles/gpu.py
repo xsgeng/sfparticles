@@ -1,4 +1,5 @@
 from numba import cuda
+import cupy as cp
 from math import sqrt
 from .particles import c
 tpb = 128
@@ -23,7 +24,9 @@ boris_gpu = cuda.jit(boris_inline)
 @cuda.jit
 def boris_kernal( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt ) :
     ip = cuda.grid(1)
-    if ip < N and ~to_be_pruned[ip]:
+    if ip < N:
+        if to_be_pruned[ip]:
+            return
         ux[ip], uy[ip], uz[ip], inv_gamma[ip] = boris_gpu(
             ux[ip], uy[ip], uz[ip], Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], q, dt)
 
@@ -36,7 +39,9 @@ LL_push_gpu = cuda.jit(LL_push_inline)
 @cuda.jit
 def LL_push_kernal( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ) :
     ip = cuda.grid(1)
-    if ip < N and ~to_be_pruned[ip]:
+    if ip < N:
+        if to_be_pruned[ip]:
+            return
         ux[ip], uy[ip], uz[ip], inv_gamma[ip] = LL_push_gpu(ux[ip], uy[ip], uz[ip], inv_gamma[ip], chi_e[ip], dt)
         
 def LL_push( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ):
@@ -49,7 +54,9 @@ calculate_chi_gpu = cuda.jit(calculate_chi_inline)
 @cuda.jit
 def update_chi_kernal(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned):
     ip = cuda.grid(1)
-    if ip < N and ~to_be_pruned[ip]:
+    if ip < N:
+        if to_be_pruned[ip]:
+            return
         chi_e[ip] = calculate_chi_gpu(
             Ex[ip], Ey[ip], Ez[ip], 
             Bx[ip], By[ip], Bz[ip], 
@@ -61,13 +68,6 @@ def update_chi(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pr
     update_chi_kernal[bpg, tpb](Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma, chi_e, N, to_be_pruned)
 
 
-@cuda.reduce
-def bool_sum(a, b):
-    if a and b:
-        return 2
-    if a or b:
-        return 1
-    return 0
 
 @cuda.jit
 def pick_hard_photon_kernal(event, delta, inv_gamma, threshold, N):
@@ -84,7 +84,9 @@ def pick_hard_photon(event, delta, inv_gamma, threshold, N):
 @cuda.jit
 def photon_recoil_kernal(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
     ip = cuda.grid(1)
-    if ip < N and ~to_be_pruned[ip]:
+    if ip < N:
+        if to_be_pruned[ip]:
+            return
         if event[ip]:
             ux[ip] *= 1 - photon_delta[ip]
             uy[ip] *= 1 - photon_delta[ip]
@@ -179,3 +181,58 @@ def create_pair(
         event_index, pair_delta, N_buffered, N_pair,
         inverse_delta,
     )
+
+@cuda.jit
+def _find_event_count_block(event, event_count_block):
+    i = cuda.grid(1)
+    if i < event.size:
+        if event[i]:
+            blockid = cuda.blockIdx.x
+            cuda.atomic.inc(event_count_block, blockid, event.size)
+
+@cuda.jit
+def _find_event_index(event, event_count_block, event_index_start, event_index):
+    '''
+    block内的thread寻找event，
+    每个thread对应一个event_index。
+    [blocks,tpb]与find_event_count_block相同，
+    block内的event数不会超过thread数。
+    '''
+    pos = cuda.grid(1)
+    if pos < event.size:
+        blockid = cuda.blockIdx.x
+        tid = cuda.threadIdx.x # block内的tid
+        nthread = int(event_count_block[blockid])
+        nevent = nthread
+        if nevent == 0 or tid > 0:
+            return
+        
+        tpb = cuda.blockDim.x
+        
+        start = blockid * tpb
+        end = min(event.size, start + tpb)
+        
+        if blockid == 0:
+            idx = 0 + tid
+        else:
+            idx = event_index_start[blockid-1] + tid
+
+        for ip in range(start, end):
+            if event[ip]:
+                event_index[idx] = ip
+                idx += 1
+
+def find_event_index(d_event):
+    N = d_event.size
+    tpb = 16
+    blocks = int(N/tpb) + 1
+    
+    d_event_count_block = cp.zeros(blocks, cp.uint64)
+    _find_event_count_block[blocks, tpb](d_event, d_event_count_block)
+    
+    d_event_index_start = d_event_count_block.cumsum()
+    d_event_index = cp.zeros(int(d_event_index_start[-1]), dtype=cp.int64)
+    
+    _find_event_index[blocks, tpb](d_event, d_event_count_block, d_event_index_start, d_event_index)
+    
+    return d_event_index

@@ -1,5 +1,5 @@
-from numba import njit, float64, void, int64, boolean, prange
-from numpy import sqrt
+from numba import njit, float64, void, int64, uint32, boolean, prange
+from numpy import sqrt, zeros
 from .particles import c, m_e
 
 @njit(void(*[float64[:]]*7, int64, boolean[:], float64), parallel=True, cache=True)
@@ -140,13 +140,15 @@ def create_pair(
         photon_to_be_pruned[idx_src] = True
         
          
-@njit(void(boolean[:], int64[:], int64))
-def find_event_index(event, index, N):
+@njit(int64[:](boolean[:]))
+def find_event_index(event):
+    event_index = zeros(event.sum(), dtype='int64')
     idx = 0
-    for i in range(N):
+    for i in range(event.size):
         if event[i]:
-            index[idx] = i
+            event_index[idx] = i
             idx += 1
+    return event_index
 
 @njit(int64(boolean[:]))
 def bool_sum(event):

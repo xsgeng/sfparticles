@@ -3,6 +3,9 @@ from .fields import Fields
 from .particles import Particles, c
 from tqdm import tqdm
 
+import warnings
+from numba.core.errors import NumbaPerformanceWarning
+warnings.filterwarnings('ignore', category=NumbaPerformanceWarning)
 
 from . import _use_gpu
 class Simulation(object):
@@ -33,10 +36,14 @@ class Simulation(object):
 
         self.progress_bar = None
 
+        self.particles_dict = {p.name : p for p in self.all_particles}
         for p in all_particles:
             if p.bw:
+                assert p.bw_electron in self.particles_dict, f"{p.bw_electron} not included in simulation."
+                assert p.bw_positron in self.particles_dict, f"{p.bw_positron} not included in simulation."
                 self.particles_bw.append(p)
             if p.radiating:
+                assert p.photon in self.particles_dict
                 self.particles_rad.append(p)
             if p.push:
                 self.particles_push.append(p)
@@ -50,7 +57,6 @@ class Simulation(object):
             if self.print_every:
                 self.progress_bar = tqdm(total=total, unit='step', smoothing=1)
 
-        particles_dict = {p.name : p for p in self.all_particles}
 
         if _use_gpu:
             for p in self.all_particles:
@@ -81,12 +87,12 @@ class Simulation(object):
             # seperated from events generation
             # since particles created in the current loop do NOT further create particle
             for particles in self.particles_rad:
-                photon = particles_dict[particles.photon]
+                photon = self.particles_dict[particles.photon]
                 particles._create_photon(photon)
 
             for particles in self.particles_bw:
-                bw_electron = particles_dict[particles.bw_electron]
-                bw_positron = particles_dict[particles.bw_positron]
+                bw_electron = self.particles_dict[particles.bw_electron]
+                bw_positron = self.particles_dict[particles.bw_positron]
                 particles._create_pair(bw_electron, bw_positron)
 
             for particles in self.particles_push:
