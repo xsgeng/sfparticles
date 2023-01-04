@@ -364,6 +364,6 @@ class Particles(object):
         selected = ~self._to_be_pruned
         for attr in self.attrs:
             setattr(self, attr, (getattr(self, attr))[selected])
-        N = self.Npart
+        N = selected.sum()
         self.buffer_size = N
         self.N_buffered = N
