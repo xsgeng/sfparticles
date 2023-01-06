@@ -16,22 +16,22 @@ class Fields(object):
                 field_func_inline = field_func
             else:
                 field_func_inline = cuda.jit(field_func)
-                @cuda.jit
-                def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
-                    ip = cuda.grid(1)
-                    if ip < N and ~to_be_pruned[ip]:
-                        Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip] = field_func_inline(x[ip], y[ip], z[ip], t)
+            @cuda.jit
+            def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
+                ip = cuda.grid(1)
+                if ip < N and ~to_be_pruned[ip]:
+                    Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip] = field_func_inline(x[ip], y[ip], z[ip], t)
         else:
             if isinstance(field_func, CPUDispatcher):
                 field_func_inline = field_func
             else:
                 field_func_inline = njit(field_func, cache=False)
-                @njit(parallel=True, cache=False)
-                def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
-                    for ip in prange(N):
-                        if to_be_pruned[ip]:
-                            continue
-                        Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip] = field_func_inline(x[ip], y[ip], z[ip], t)
+            @njit(parallel=True, cache=False)
+            def field_function(x, y, z, t, N, to_be_pruned, Ex, Ey, Ez, Bx, By, Bz):
+                for ip in prange(N):
+                    if to_be_pruned[ip]:
+                        continue
+                    Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip] = field_func_inline(x[ip], y[ip], z[ip], t)
 
         self.field_func_inline = field_func_inline
         self.field_func = field_function
