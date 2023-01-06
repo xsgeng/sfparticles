@@ -1,7 +1,7 @@
 from time import perf_counter_ns
 from .fields import Fields
 from .particles import Particles, c
-from tqdm import tqdm
+from tqdm.autonotebook import tqdm
 
 import warnings
 from numba.core.errors import NumbaPerformanceWarning
