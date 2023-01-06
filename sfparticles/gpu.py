@@ -234,7 +234,7 @@ if _use_gpu:
                     event_index[idx] = ip
                     idx += 1
 
-    def find_event_index(d_event):
+    def find_event_index(d_event, N_event):
         N = d_event.size
         tpb = 16
         blocks = int(N/tpb) + 1

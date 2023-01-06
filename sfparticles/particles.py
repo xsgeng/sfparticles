@@ -294,10 +294,10 @@ class Particles(object):
 
         
         if hasattr(self, 'photon'):
-            pho._extend(N_photon)
-
             # events are already false when marked as pruned in QED
-            event_index = find_event_index(self.event)
+            event_index = find_event_index(self.event, N_photon)
+            pho._extend(N_photon)
+            
             create_photon(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
                 pho.x, pho.y, pho.z, pho.ux, pho.uy, pho.uz,
@@ -315,11 +315,11 @@ class Particles(object):
         
         
         if hasattr(self, 'bw_electron'):
+            # events are already false when marked as pruned in QED and extend methods
+            event_index = find_event_index(self.event, N_pair)
+            
             ele._extend(N_pair)
             pos._extend(N_pair)
-            
-            # events are already false when marked as pruned in QED
-            event_index = find_event_index(self.event)
             create_pair(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
                 self._to_be_pruned,
@@ -349,6 +349,8 @@ class Particles(object):
             for attr in self.attrs:
                 # self.* = np.concatenate((self.*, append_buffer))
                 setattr(self, attr, resize(getattr(self, attr), buffer_size_new))
+                if attr == 'event':
+                    self.event[-(buffer_size_new-self.buffer_size):] = False
 
             self._to_be_pruned[-(buffer_size_new-self.buffer_size):] = True
 

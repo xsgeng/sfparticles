@@ -140,9 +140,9 @@ def create_pair(
         photon_to_be_pruned[idx_src] = True
         
          
-@njit(int64[:](boolean[:]))
-def find_event_index(event):
-    event_index = zeros(event.sum(), dtype='int64')
+@njit(int64[:](boolean[:], int64))
+def find_event_index(event, N_event):
+    event_index = zeros(N_event, dtype='int64')
     idx = 0
     for i in range(event.size):
         if event[i]:
