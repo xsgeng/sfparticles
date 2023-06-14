@@ -222,6 +222,7 @@ class Particles(object):
                 self.q, self.N_buffered, self._to_be_pruned, dt
             )
             if self.RR == RadiationReactionType.LL:
+                self._calculate_chi()
                 LL_push(
                     self.ux, self.uy, self.uz, 
                     self.inv_gamma, self.chi,  
