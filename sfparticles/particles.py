@@ -14,12 +14,12 @@ from .gpu import _use_gpu
 if _use_gpu:
     import cupy as cp
     from cupy import resize
-    from .gpu import push_position, boris, LL_push, update_chi, \
+    from .gpu import push_position, boris, boris_tbmt, LL_push, update_chi, \
         pick_hard_photon, photon_recoil, create_pair, create_photon, \
         find_event_index, bool_sum
 else:
     from numpy import resize
-    from .cpu import push_position, boris, LL_push, update_chi, \
+    from .cpu import push_position, boris, boris_tbmt, LL_push, update_chi, \
         pick_hard_photon, photon_recoil, create_pair, create_photon, \
         find_event_index, bool_sum
 
@@ -44,6 +44,7 @@ class Particles(object):
         props : Tuple = None,
         RR : RadiationReactionType = RadiationReactionType.PHOTON,
         has_spin = False,
+        ae = 0.0,
         push = True,
     ) -> None:
         """
@@ -105,6 +106,7 @@ class Particles(object):
                 sx = np.zeros(N)
                 sy = np.zeros(N)
                 sz = np.ones(N)
+                self.ae = ae
 
         if props:
             assert len(props) == 6 or len(props) == 9, 'given properties must has length of 6 or 9'
@@ -242,7 +244,9 @@ class Particles(object):
         '''
         Push particle momentum
         '''
-        if self.m > 0:
+        if self.m == 0:
+            return
+        if ~self.has_spin:
             boris(
                 self.ux, self.uy, self.uz,
                 self.inv_gamma,
@@ -250,15 +254,25 @@ class Particles(object):
                 self.Bx, self.By, self.Bz,
                 self.q, self.N_buffered, self._to_be_pruned, dt
             )
-            if self.RR == RadiationReactionType.LL:
-                # LL push uses chi value
-                # see LL_push_inline for details
-                self._calculate_chi()
-                LL_push(
-                    self.ux, self.uy, self.uz, 
-                    self.inv_gamma, self.chi,  
-                    self.N_buffered, self._to_be_pruned, dt
-                )
+        else:
+            boris_tbmt(
+                self.ux, self.uy, self.uz,
+                self.inv_gamma,
+                self.sx, self.sy, self.sz,
+                self.Ex, self.Ey, self.Ez, 
+                self.Bx, self.By, self.Bz,
+                self.q, self.ae, self.N_buffered, self._to_be_pruned, dt
+            )
+           
+        if self.RR == RadiationReactionType.LL:
+            # LL push uses chi value
+            # see LL_push_inline for details
+            self._calculate_chi()
+            LL_push(
+                self.ux, self.uy, self.uz, 
+                self.inv_gamma, self.chi,  
+                self.N_buffered, self._to_be_pruned, dt
+            )
 
 
     def _push_position(self, dt):

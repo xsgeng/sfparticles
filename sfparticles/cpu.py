@@ -30,6 +30,17 @@ def boris( ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt
         ux[ip], uy[ip], uz[ip], inv_gamma[ip] = boris_cpu(
             ux[ip], uy[ip], uz[ip], Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], q, dt)
 
+from .inline import boris_tbmt_inline
+boris_tbmt_cpu = njit(boris_tbmt_inline)
+@njit(void(*[float64[:]]*13, float64, float64, int64, boolean[:], float64), parallel=True, cache=False)
+def boris_tbmt( ux, uy, uz, inv_gamma, sx, sy, sz, Ex, Ey, Ez, Bx, By, Bz, q, ae, N, to_be_pruned, dt ) :
+    for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
+
+        ux[ip], uy[ip], uz[ip], inv_gamma[ip], sx[ip], sy[ip], sz[ip] = boris_tbmt_cpu(
+            ux[ip], uy[ip], uz[ip], sx[ip], sy[ip], sz[ip], Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], q, ae, dt)
+
 from .inline import LL_push_inline
 LL_push_cpu = njit(LL_push_inline)
 @njit(void(*[float64[:]]*5, int64, boolean[:], float64), parallel=True, cache=False)

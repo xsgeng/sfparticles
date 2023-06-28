@@ -45,6 +45,21 @@ if _use_gpu:
         bpg = int(N/tpb) + 1
         boris_kernal[bpg, tpb](ux, uy, uz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, N, to_be_pruned, dt)
 
+    from .inline import boris_tbmt_inline
+    boris_tbmt_gpu = cuda.jit(boris_tbmt_inline)
+    @cuda.jit
+    def boris_tbmt_kernal( ux, uy, uz, inv_gamma, sx, sy, sz, Ex, Ey, Ez, Bx, By, Bz, q, ae, N, to_be_pruned, dt ) :
+        ip = cuda.grid(1)
+        if ip < N:
+            if to_be_pruned[ip]:
+                return
+            ux[ip], uy[ip], uz[ip], inv_gamma[ip], sx[ip], sy[ip], sz[ip] = boris_tbmt_gpu(
+                ux[ip], uy[ip], uz[ip], sx[ip], sy[ip], sz[ip], Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], q, ae, dt)
+
+    def boris_tbmt( ux, uy, uz, inv_gamma, sx, sy, sz, Ex, Ey, Ez, Bx, By, Bz, q, ae, N, to_be_pruned, dt ):
+        bpg = int(N/tpb) + 1
+        boris_tbmt_kernal[bpg, tpb](ux, uy, uz, sx, sy, sz, inv_gamma, Ex, Ey, Ez, Bx, By, Bz, q, ae, N, to_be_pruned, dt)
+
     from .inline import LL_push_inline
     LL_push_gpu = cuda.jit(LL_push_inline)
     @cuda.jit
