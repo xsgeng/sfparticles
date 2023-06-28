@@ -25,6 +25,9 @@ else:
 
 class RadiationReactionType(Enum):
     """
+    辐射反作用类型
+    `None` : 无辐射反作用
+    `photon` : 光子产生辐射反作用
     `LL` : approximated Landau-Lifshitz equation for gamma >> 1
     `cLL` : quantum-corrected Landau-Lifshitz equation
     """
@@ -44,7 +47,12 @@ class Particles(object):
         push = True,
     ) -> None:
         """
-        ## 初始化粒子
+        ## initialize particles
+
+        Initializes a particle object with the given properties.
+
+        parameters
+        ----------
 
         `q` : int
             电荷，正负电子分别为±1
@@ -165,24 +173,39 @@ class Particles(object):
         self.attrs += ['_to_be_pruned']
 
     def _to_gpu(self):
+        '''
+        send data to gpu
+        '''
         if _use_gpu:
             for attr in self.attrs:
                 setattr(self, attr, cp.asarray(getattr(self, attr)))
         
     def _to_host(self):
+        '''
+        send data to host
+        '''
         if _use_gpu:
             for attr in self.attrs:
                 setattr(self, attr, getattr(self, attr).get())
         
     @property
     def Npart(self):
+        '''
+        Count number of particles
+        '''
         return self.buffer_size - int(bool_sum(self._to_be_pruned))
 
     @property
     def gamma(self):
+        '''
+        Photon gamma factor
+        '''
         return 1.0 / self.inv_gamma
 
     def set_photon(self, photon):
+        '''
+        set photon properties
+        '''
         assert self.m > 0, 'photon cannot radiate photon'
         assert self.RR != RadiationReactionType.LL and self.RR != RadiationReactionType.CLL, 'LL equation does not radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
@@ -198,6 +221,9 @@ class Particles(object):
         
         
     def set_pair(self, electron, positron):
+        '''
+        Set pair properties
+        '''
         assert self.m == 0, 'massive particle cannot create BW pair'
         assert isinstance(electron, Particles) and isinstance(positron, Particles), 'pair must be tuple or list of Particle class'
         assert electron.m == m_e and electron.q == -e, f'first of the pair must be electron'
@@ -213,6 +239,9 @@ class Particles(object):
             self.attrs += ['tau']
         
     def _push_momentum(self, dt):
+        '''
+        Push particle momentum
+        '''
         if self.m > 0:
             boris(
                 self.ux, self.uy, self.uz,
@@ -222,6 +251,8 @@ class Particles(object):
                 self.q, self.N_buffered, self._to_be_pruned, dt
             )
             if self.RR == RadiationReactionType.LL:
+                # LL push uses chi value
+                # see LL_push_inline for details
                 self._calculate_chi()
                 LL_push(
                     self.ux, self.uy, self.uz, 
@@ -240,6 +271,9 @@ class Particles(object):
 
 
     def _eval_field(self, fields : Fields, t):
+        '''
+        Evaluate EM fields at particle position
+        '''
         if _use_gpu:
             from .gpu import tpb
             bpg = int(self.N_buffered / tpb) + 1

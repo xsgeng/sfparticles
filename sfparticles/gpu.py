@@ -1,15 +1,14 @@
-from os import environ
+from os import getenv
 _use_gpu = False
-if "SFPARTICLES_USE_GPU" in environ:
-    if environ["SFPARTICLES_USE_GPU"] == "1":
-        try:
-            from numba import cuda
-            import cupy as cp
-        except ImportError as e:
-            raise e
-        
-        print("using GPU")
-        _use_gpu = True
+if getenv("SFPARTICLES_USE_GPU") == "1":
+    try:
+        from numba import cuda
+        import cupy as cp
+    except ImportError as e:
+        raise e
+    
+    print("using GPU")
+    _use_gpu = True
 
 if _use_gpu:
     from math import sqrt

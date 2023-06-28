@@ -18,8 +18,29 @@ class Simulation(object):
         photon_threshold = 2.0
     ) -> None:
         '''
-        all_particles:
-            specify all particles
+        set up a simulation.
+        Parameters
+        ----------
+        all_particles : list[Particle]
+            list of all particles in the simulation.
+
+        dt : float
+            time step in seconds
+        
+        fields : Fields
+            fields object to calculate on the particles.
+            contructed by `Fields` class.
+
+        print_every : int
+            print progress every time print_every step.
+            
+        t0 : float
+            initial time. default 0.
+            
+        photon_threshold : float
+            photon energy threshold in unit of m_e*c. default 2.0.
+
+        
         '''
         # TODO: check all inputs
         self.all_particles = all_particles

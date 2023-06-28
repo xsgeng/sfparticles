@@ -12,6 +12,28 @@ _chi_min = 10.0**_log_chi_range[0]
     parallel=True, cache=False
 )
 def update_tau_e(tau_e, inv_gamma, chi_e, dt, N, to_be_pruned, event, delta):
+    '''
+    update optical depth tau of electron
+    
+    Parameters
+    ----------
+    tau_e : array of floats
+        tau of electron
+    inv_gamma : array of floats
+        inverse of gamma factor
+    chi_e : array of floats
+        chi of electron
+    dt : float
+        dt
+    N : int
+        total number of particles, pruned included
+    to_be_pruned : array of booleans
+        to be pruned flag
+    event : array of booleans
+        event flag
+    delta : array of floats
+        photon delta
+    '''
     for ip in prange(N):
         if to_be_pruned[ip] or chi_e[ip]  < _chi_min:
             event[ip] = False
@@ -39,6 +61,28 @@ def update_tau_e(tau_e, inv_gamma, chi_e, dt, N, to_be_pruned, event, delta):
     parallel=True, cache=False
 )
 def update_tau_gamma(tau_gamma, inv_gamma, chi_gamma, dt, N, to_be_pruned, event, delta):
+    '''
+    update optical depth tau of gamma photon
+    
+    Parameters
+    ----------
+    tau_gamma : array of floats
+        tau of gamma photon
+    inv_gamma : array of floats
+        inverse of gamma factor
+    chi_gamma : array of floats
+        chi of gamma photon
+    dt : float
+        dt
+    N : int
+        total number of particles, pruned included
+    to_be_pruned : array of booleans
+        to be pruned flag
+    event : array of booleans
+        event flag
+    delta : array of floats
+        pair delta
+    '''
     for ip in prange(N):
         if to_be_pruned[ip] or chi_gamma[ip] < _chi_min:
             event[ip] = False

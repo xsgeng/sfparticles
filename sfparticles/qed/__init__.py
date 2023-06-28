@@ -1,5 +1,6 @@
-import os
+from os import getenv
+
+# set optical depth method from environmental variable
 _use_optical_depth = False
-if "SFPARTICLES_OPTICAL_DEPTH" in os.environ:
-    if os.environ["SFPARTICLES_OPTICAL_DEPTH"] == "1":
-        _use_optical_depth = True
+if getenv("SFPARTICLES_OPTICAL_DEPTH") == "1":
+    _use_optical_depth = True

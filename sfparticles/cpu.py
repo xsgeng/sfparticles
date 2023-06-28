@@ -116,6 +116,36 @@ def create_pair(
     event_index, pair_delta, N_buffered, N_pair,
     inverse_delta,
 ):
+    '''
+    create pairs
+    
+    Parameters
+    ----------
+    x_src, y_src, z_src: float64 array
+        source photon position
+    ux_src, uy_src, uz_src: float64 array
+        source photon momenta
+    photon_to_be_pruned: boolean array
+        photon to be pruned array
+    x_dst, y_dst, z_dst: float64 array
+        electron or position position
+    ux_dst, uy_dst, uz_dst: float64 array
+        electron or position momenta
+    inv_gamma_dst: float64 array
+        electron or position inverse gamma
+    pair_to_be_pruned: boolean array
+        pair to be pruned array
+    event_index: int64 array
+        event index array
+    pair_delta: float64 array
+        pair delta array
+    N_buffered: int64
+        N_photon + N_pair
+    N_pair: int64
+        number of pairs
+    inverse_delta: boolean
+        if true,
+    '''
     for ip in prange(N_pair):
         idx_src = event_index[ip]
         idx_dst = N_buffered+ip
@@ -142,6 +172,21 @@ def create_pair(
          
 @njit(int64[:](boolean[:], int64))
 def find_event_index(event, N_event):
+    '''
+    find an event index given an event array.
+    
+    Parameters
+    ----------
+    event: boolean array
+        event array
+    N_event: int64
+        total number of events
+    
+    Returns
+    -------
+    event_index: int64 array
+        1D array of event index
+    '''
     event_index = zeros(N_event, dtype='int64')
     idx = 0
     for i in range(event.size):

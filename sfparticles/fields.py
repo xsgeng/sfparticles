@@ -10,7 +10,19 @@ if _use_gpu:
     from numba.cuda.dispatcher import CUDADispatcher
 class Fields(object):
     def __init__(self, field_func : Callable) -> None:
-        
+        '''
+        Construct Fields object from user function
+        Parameters
+        ----------
+        field_func : Callable
+            User defined function that takes 4 arguments: x, y, z, t
+            and returns 6 values: Ex, Ey, Ez, Bx, By, Bz
+        Returns
+        -------
+        Fields object
+        '''
+
+        # construct jitted function
         if _use_gpu:
             if isinstance(field_func, CUDADispatcher):
                 field_func_inline = field_func
@@ -54,6 +66,30 @@ class Fields(object):
 #     pass
 
 def simple_laser_pulse(a0, w0, ctau, direction=1,  x0=0, wavelength=0.8e-6, pol_angle=0, cep=0):
+    '''
+    Simple laser pulse without focusing.
+    Parameters
+    ----------
+    a0 : float
+        Amplitude of the laser pulse
+    w0 : float
+        w_0 of the laser pulse at 1/e
+    ctau : float
+        Width of the laser pulse in length at 1/e
+    direction : int
+        Direction of the laser pulse (+1 or -1)
+    x0 : float
+        center of the laser pulse
+    wavelength : float
+        Wavelength of the laser pulse
+    pol_angle : float
+        Polarization angle of the laser pulse in rad
+    cep : float
+        Carrier envelope phase of the laser pulse
+    Returns
+    -------
+    Simple laser pulse Fields object
+    '''
     assert direction == 1 or direction == -1, "direction must be +1 (+x) or -1 (-x)"
 
     omega0 = 2*pi*c / wavelength
@@ -79,6 +115,30 @@ def simple_laser_pulse(a0, w0, ctau, direction=1,  x0=0, wavelength=0.8e-6, pol_
     return Fields(_laser_pulse)
 
 def gaussian_laser_pulse(a0, w0, ctau, direction=1, x0=0.0, l0=0.8e-6, pol_angle=0.0, cep=0.0):
+    '''
+    Gaussian laser pulse
+    Parameters
+    ----------
+    a0 : float
+        Amplitude of the laser pulse
+    w0 : float
+        w_0 of the laser pulse at 1/e
+    ctau : float
+        Width of the laser pulse in length at 1/e
+    direction : int
+        Direction of the laser pulse (+1 or -1)
+    x0 : float
+        center of the laser pulse
+    l0 : float
+        Wavelength of the laser pulse
+    pol_angle : float
+        Polarization angle of the laser pulse in rad
+    cep : float
+        Carrier envelope phase of the laser pulse
+    Returns
+    -------
+    gaussian pulse Fields object
+    '''
     assert direction == 1 or direction == -1, "direction must be +1 (+x) or -1 (-x)"
 
     omega0 = 2*pi*c/l0
