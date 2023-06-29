@@ -120,11 +120,3 @@ def calculate_chi_inline(Ex, Ey, Ez, Bx, By, Bz, ux, uy, uz, inv_gamma):
         (gamma*Ez + (ux*By - uy*Bx)*c)**2 -
         (ux*Ex + uy*Ey + uz*Ez)**2
     )
-
-
-
-
-            
-
-
-

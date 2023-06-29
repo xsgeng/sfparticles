@@ -1,5 +1,5 @@
-from .particles import Particles, RadiationReactionType
+from .particles import Particles, SpinParticles, RadiationReactionType
 from .simulation import Simulation
 from .fields import Fields
 
-__all__ = ["Particles", "Simulation", "Fields", "RadiationReactionType"]
+__all__ = ["Particles", "SpinParticles", "Simulation", "Fields", "RadiationReactionType"]

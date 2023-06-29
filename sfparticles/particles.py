@@ -43,8 +43,6 @@ class Particles(object):
         q: int, m: float, N: int = 0,
         props : Tuple = None,
         RR : RadiationReactionType = RadiationReactionType.PHOTON,
-        has_spin = False,
-        ae = 0.0,
         push = True,
     ) -> None:
         """
@@ -78,7 +76,6 @@ class Particles(object):
         self.name = name
         self.q = q * e
         self.m = m * m_e
-        self.has_spin = has_spin
         self.RR = RR
         self.push = push
         self.bw = False
@@ -96,52 +93,24 @@ class Particles(object):
         if props is None:
             if m == 0:
                 assert N == 0, "cannot initialize photons with only N without props."
-            x = np.zeros(N)
-            y = np.zeros(N)
-            z = np.zeros(N)
-            ux = np.zeros(N)
-            uy = np.zeros(N)
-            uz = np.zeros(N)
-            if has_spin:
-                sx = np.zeros(N)
-                sy = np.zeros(N)
-                sz = np.ones(N)
-                self.ae = ae
+            self.x = np.zeros(N)
+            self.y = np.zeros(N)
+            self.z = np.zeros(N)
+            self.ux = np.zeros(N)
+            self.uy = np.zeros(N)
+            self.uz = np.zeros(N)
+                
 
         if props:
-            assert len(props) == 6 or len(props) == 9, 'given properties must has length of 6 or 9'
+            assert len(props) == 6, 'given properties must has length of 6'
 
-            for prop in props:
-                if isinstance(prop, np.ndarray):
-                    assert len(prop.shape) == 1, 'given property is not vector'
-                    assert prop.shape[0] == N, 'given N does not match given property length'
-                if isinstance(prop, (int, float)):
-                    assert N == 1, 'given N does not match given property length'
-                if isinstance(prop, (list, tuple)):
-                    assert len(prop) == N, 'given N does not match given property length'
-                
-            for i, prop in enumerate(props):
-                if isinstance(prop, (int, float)):
-                    props[i] = [prop]
+            props_ = prepare_props(props, N)
 
-            x, y, z, ux, uy, uz = props[:6]
-            if len(props) == 9 and has_spin:
-                sx, sy, sz = props[7:]
+            self.x, self.y, self.z, self.ux, self.uy, self.uz = props_
 
         # position, momentum and spin vectors
-        self.x = np.asarray(x, dtype=np.float64)
-        self.y = np.asarray(y, dtype=np.float64)
-        self.z = np.asarray(z, dtype=np.float64)
-        self.ux = np.asarray(ux, dtype=np.float64)
-        self.uy = np.asarray(uy, dtype=np.float64)
-        self.uz = np.asarray(uz, dtype=np.float64)
         self.attrs += ['x', 'y', 'z', 'ux', 'uy', 'uz']
 
-        if self.has_spin:
-            self.sx = sx
-            self.sy = sy
-            self.sz = sz
-            self.attrs += ['sx', 'sy', 'sz']
 
         # gamma factor
         if m > 0:
@@ -246,23 +215,13 @@ class Particles(object):
         '''
         if self.m == 0:
             return
-        if ~self.has_spin:
-            boris(
-                self.ux, self.uy, self.uz,
-                self.inv_gamma,
-                self.Ex, self.Ey, self.Ez, 
-                self.Bx, self.By, self.Bz,
-                self.q, self.N_buffered, self._to_be_pruned, dt
-            )
-        else:
-            boris_tbmt(
-                self.ux, self.uy, self.uz,
-                self.inv_gamma,
-                self.sx, self.sy, self.sz,
-                self.Ex, self.Ey, self.Ez, 
-                self.Bx, self.By, self.Bz,
-                self.q, self.ae, self.N_buffered, self._to_be_pruned, dt
-            )
+        boris(
+            self.ux, self.uy, self.uz,
+            self.inv_gamma,
+            self.Ex, self.Ey, self.Ez, 
+            self.Bx, self.By, self.Bz,
+            self.q, self.N_buffered, self._to_be_pruned, dt
+        )
            
         if self.RR == RadiationReactionType.LL:
             # LL push uses chi value
@@ -418,3 +377,73 @@ class Particles(object):
         N = selected.sum()
         self.buffer_size = N
         self.N_buffered = N
+
+class SpinParticles(Particles):
+    def __init__(
+        self, 
+        name: str, 
+        q: int, 
+        m: float, 
+        N: int = 0, 
+        props: Tuple = None, 
+        RR: RadiationReactionType = RadiationReactionType.PHOTON, 
+        ae: float = 1.14e-3, 
+        push: bool = True
+    ) -> None:
+        if props is None:
+            if m == 0:
+                assert N == 0, "cannot initialize photons with only N without props."
+            super().__init__(name, q, m, N, props, RR, push)
+            self.sx = np.zeros(N)
+            self.sy = np.zeros(N)
+            self.sz = np.zeros(N)
+        if props:
+            assert len(props) == 9, 'given properties must has length of 9'
+            super().__init__(name, q, m, N, props[:6], RR, ae, push)
+            props_ = prepare_props(props[6:])
+
+            self.sx, self.sy, self.sz = props_
+
+        self.ae = ae
+        self.attrs += ['sx', 'sy', 'sz']
+
+
+    def _push_momentum(self, dt):
+        '''
+        Push particle momentum
+        '''
+        if self.m == 0:
+            return
+        boris_tbmt(
+            self.ux, self.uy, self.uz,
+            self.inv_gamma,
+            self.sx, self.sy, self.sz,
+            self.Ex, self.Ey, self.Ez, 
+            self.Bx, self.By, self.Bz,
+            self.q, self.ae, self.N_buffered, self._to_be_pruned, dt
+        )
+           
+        if self.RR == RadiationReactionType.LL:
+            # LL push uses chi value
+            # see LL_push_inline for details
+            self._calculate_chi()
+            LL_push(
+                self.ux, self.uy, self.uz, 
+                self.inv_gamma, self.chi,  
+                self.N_buffered, self._to_be_pruned, dt
+            )
+
+def prepare_props(props, N):
+    props_ = []
+    for prop in props:
+        if isinstance(prop, np.ndarray):
+            assert len(prop.shape) == 1, 'given property is not vector'
+            assert prop.shape[0] == N, 'given N does not match given property length'
+            props_.append(prop)
+        if isinstance(prop, (int, float)):
+            assert N == 1, 'given N does not match given property length'
+            props_.append(np.asarray([prop], dtype=np.float64))
+        if isinstance(prop, (list, tuple)):
+            assert len(prop) == N, 'given N does not match given property length'
+            props_.append(np.asarray(prop, dtype=np.float64))
+    return props_
