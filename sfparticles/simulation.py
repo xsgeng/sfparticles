@@ -85,16 +85,10 @@ class Simulation(object):
 
         tic = perf_counter_ns()
         for istep in range(self.step, self.step + nstep):
-            # push particles
-            for particles in self.particles_push:
+            for particles in self.all_particles:
+                # fields at t = i*dt
                 particles._eval_field(self.fields, self.t)
-
-                # from t = (i-0.5)*dt to t = (i+0.5)*dt
-                particles._push_momentum(self.dt)
-                # from t = i*dt       to t = (i+0.5)*dt
-                particles._push_position(0.5*self.dt)
-                
-            # QED
+            # QED at t = i*dt
             for particles in self.particles_bw:
                 particles._calculate_chi()
                 particles._pair_event(self.dt)
@@ -117,7 +111,14 @@ class Simulation(object):
                 particles._create_pair(bw_electron, bw_positron)
 
             for particles in self.particles_push:
-                # from t = (i+0.5)*dt to t = (i+1)*dt
+                # 2nd order push, x and p fron i to i+1
+                # from t = i*dt       to t = (i+0.5)*dt
+                particles._push_position(0.5*self.dt)
+                # fields at t = (i+0.5)*dt
+                particles._eval_field(self.fields, self.t+0.5*self.dt)
+                # from t = i*dt       to t = (i+1)*dt
+                particles._push_momentum(self.dt)
+                # from t = (i+0.5)*dt to t = (i+1)*dt using new momentum
                 particles._push_position(0.5*self.dt)
             
             
