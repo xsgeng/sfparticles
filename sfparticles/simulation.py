@@ -57,14 +57,13 @@ class Simulation(object):
 
         self.progress_bar = None
 
-        self.particles_dict = {p.name : p for p in self.all_particles}
         for p in all_particles:
             if p.bw:
-                assert p.bw_electron in self.particles_dict, f"{p.bw_electron} not included in simulation."
-                assert p.bw_positron in self.particles_dict, f"{p.bw_positron} not included in simulation."
+                assert p.bw_electron_ref() in all_particles, f"{p.bw_electron_ref().name} not included in simulation."
+                assert p.bw_positron_ref() in all_particles, f"{p.bw_positron_ref().name} not included in simulation."
                 self.particles_bw.append(p)
             if p.radiating:
-                assert p.photon in self.particles_dict
+                assert p.photon_ref() in all_particles, f"{p.photon_ref().name} not included in simulation."
                 self.particles_rad.append(p)
             if p.push:
                 self.particles_push.append(p)
@@ -102,12 +101,12 @@ class Simulation(object):
             # seperated from events generation
             # since particles created in the current loop do NOT further create particle
             for particles in self.particles_rad:
-                photon = self.particles_dict[particles.photon]
+                photon = particles.photon_ref()
                 particles._create_photon(photon)
 
             for particles in self.particles_bw:
-                bw_electron = self.particles_dict[particles.bw_electron]
-                bw_positron = self.particles_dict[particles.bw_positron]
+                bw_electron = particles.bw_electron_ref()
+                bw_positron = particles.bw_positron_ref()
                 particles._create_pair(bw_electron, bw_positron)
 
             for particles in self.particles_push:

@@ -1,5 +1,6 @@
 from enum import Enum, auto
 from typing import Tuple, Union
+from weakref import ref
 import numpy as np
 from scipy.constants import c, m_e, e, hbar, epsilon_0, pi
 from .fields import Fields
@@ -182,7 +183,7 @@ class Particles(object):
         assert isinstance(photon, Particles), 'photon must be Particle class'
         assert photon.m == 0 and photon.q == 0, 'photon must be m=0 and q=0'
         self.radiating = True
-        self.photon = photon.name
+        self.photon_ref = ref(photon) # avoid gc of mutual reference
         self.event = np.full(self.buffer_size, False)
         self.photon_delta = np.zeros(self.buffer_size)
         self.attrs += ["event", "photon_delta"]
@@ -200,8 +201,8 @@ class Particles(object):
         assert electron.m == m_e and electron.q == -e, f'first of the pair must be electron'
         assert positron.m == m_e and positron.q ==  e, f'second of the pair must be positron'
         self.bw = True
-        self.bw_electron = electron.name
-        self.bw_positron = positron.name
+        self.bw_electron_ref = ref(electron) # avoid gc of mutual reference
+        self.bw_positron_ref = ref(positron)
         self.event = np.full(self.buffer_size, False)
         self.pair_delta = np.zeros(self.buffer_size)
         self.attrs += ["event", "pair_delta"]
@@ -301,7 +302,7 @@ class Particles(object):
             return
 
         
-        if hasattr(self, 'photon'):
+        if hasattr(self, 'photon_ref'):
             # events are already false when marked as pruned in QED
             event_index = find_event_index(self.event, N_photon)
             pho._extend(N_photon)
@@ -322,7 +323,7 @@ class Particles(object):
             return
         
         
-        if hasattr(self, 'bw_electron'):
+        if hasattr(self, 'bw_electron_ref'):
             # events are already false when marked as pruned in QED and extend methods
             event_index = find_event_index(self.event, N_pair)
             
