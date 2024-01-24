@@ -84,7 +84,7 @@ class Simulation(object):
 
         tic = perf_counter_ns()
         for istep in range(self.step, self.step + nstep):
-            for particles in self.all_particles:
+            for particles in self.particles_push:
                 # fields at t = i*dt
                 particles._eval_field(self.fields, self.t)
             # QED at t = i*dt
