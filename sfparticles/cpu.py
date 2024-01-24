@@ -50,6 +50,15 @@ def LL_push( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ) :
             continue
         ux[ip], uy[ip], uz[ip], inv_gamma[ip] = LL_push_cpu(ux[ip], uy[ip], uz[ip], inv_gamma[ip], chi_e[ip], dt)
         
+from .inline import CLL_push_inline
+CLL_push_cpu = njit(CLL_push_inline)
+@njit(void(*[float64[:]]*5, int64, boolean[:], float64), parallel=True, cache=False)
+def CLL_push( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ) :
+    for ip in prange(N):
+        if to_be_pruned[ip]:
+            continue
+        ux[ip], uy[ip], uz[ip], inv_gamma[ip] = CLL_push_cpu(ux[ip], uy[ip], uz[ip], inv_gamma[ip], chi_e[ip], dt)
+        
 from .inline import calculate_chi_inline
 calculate_chi_cpu = njit(calculate_chi_inline)
 @njit(void(*[float64[:]]*11, int64, boolean[:]), parallel=True, cache=False)

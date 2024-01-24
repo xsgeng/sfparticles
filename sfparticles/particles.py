@@ -15,12 +15,12 @@ from .gpu import _use_gpu
 if _use_gpu:
     import cupy as cp
     from cupy import resize
-    from .gpu import push_position, boris, boris_tbmt, LL_push, update_chi, \
+    from .gpu import push_position, boris, boris_tbmt, LL_push, CLL_push, update_chi, \
         pick_hard_photon, photon_recoil, create_pair, create_photon, \
         find_event_index, bool_sum
 else:
     from numpy import resize
-    from .cpu import push_position, boris, boris_tbmt, LL_push, update_chi, \
+    from .cpu import push_position, boris, boris_tbmt, LL_push, CLL_push, update_chi, \
         pick_hard_photon, photon_recoil, create_pair, create_photon, \
         find_event_index, bool_sum
 
@@ -229,6 +229,15 @@ class Particles(object):
             # see LL_push_inline for details
             self._calculate_chi()
             LL_push(
+                self.ux, self.uy, self.uz, 
+                self.inv_gamma, self.chi,  
+                self.N_buffered, self._to_be_pruned, dt
+            )
+        if self.RR == RadiationReactionType.CLL:
+            # LL push uses chi value
+            # see LL_push_inline for details
+            self._calculate_chi()
+            CLL_push(
                 self.ux, self.uy, self.uz, 
                 self.inv_gamma, self.chi,  
                 self.N_buffered, self._to_be_pruned, dt

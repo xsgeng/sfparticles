@@ -75,6 +75,21 @@ if _use_gpu:
         LL_push_kernal[bpg, tpb](ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt)
 
 
+    from .inline import CLL_push_inline
+    CLL_push_gpu = cuda.jit(CLL_push_inline)
+    @cuda.jit
+    def CLL_push_kernal( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ) :
+        ip = cuda.grid(1)
+        if ip < N:
+            if to_be_pruned[ip]:
+                return
+            ux[ip], uy[ip], uz[ip], inv_gamma[ip] = CLL_push_gpu(ux[ip], uy[ip], uz[ip], inv_gamma[ip], chi_e[ip], dt)
+            
+    def CLL_push( ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt ):
+        bpg = int(N/tpb) + 1
+        CLL_push_kernal[bpg, tpb](ux, uy, uz, inv_gamma, chi_e,  N, to_be_pruned, dt)
+
+
     from .inline import calculate_chi_inline
     calculate_chi_gpu = cuda.jit(calculate_chi_inline)
     @cuda.jit

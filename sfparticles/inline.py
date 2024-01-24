@@ -1,5 +1,5 @@
 from .particles import m_e, c, pi, epsilon_0, hbar, e
-from math import sqrt
+from math import sqrt, log
 
 def boris_inline( ux, uy, uz, Ex, Ey, Ez, Bx, By, Bz, q, dt ) :
 
@@ -103,6 +103,18 @@ def boris_tbmt_inline( ux, uy, uz, sx, sy, sz, Ex, Ey, Ez, Bx, By, Bz, q, ae, dt
 
 def LL_push_inline( ux, uy, uz, inv_gamma, chi_e, dt ) :
     factor = -2/3 / (4*pi*epsilon_0) * e**2 * m_e * c / hbar**2 * dt
+        
+    ux_ = ux + factor * chi_e**2 * ux*inv_gamma
+    uy_ = uy + factor * chi_e**2 * uy*inv_gamma
+    uz_ = uz + factor * chi_e**2 * uz*inv_gamma
+    inv_gamma_ = 1 / sqrt(1 + ux_**2 + uy_**2 + uz_**2)
+    return ux_, uy_, uz_, inv_gamma_
+    
+
+def CLL_push_inline( ux, uy, uz, inv_gamma, chi_e, dt ) :
+    g = (1 + 4.8 * (1 + chi_e) * log(1+1.7*chi_e) + 2.44*chi_e**2)**(-2/3)
+    factor = -2/3 / (4*pi*epsilon_0) * e**2 * m_e * c / hbar**2 * dt
+    factor *= g
         
     ux_ = ux + factor * chi_e**2 * ux*inv_gamma
     uy_ = uy + factor * chi_e**2 * uy*inv_gamma
