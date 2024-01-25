@@ -287,9 +287,6 @@ class Particles(object):
             update_tau_e(self.tau, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.photon_delta)
         else:
             photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
-        # RR
-        if self.RR == RadiationReactionType.PHOTON:
-            photon_recoil(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
         return self.event, self.photon_delta
 
     
@@ -325,6 +322,9 @@ class Particles(object):
             
             pho.N_buffered += N_photon
         
+        # RR
+        if self.RR == RadiationReactionType.PHOTON:
+            photon_recoil(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
 
     def _create_pair(self, ele, pos):
         N_pair = int(bool_sum(self.event))
