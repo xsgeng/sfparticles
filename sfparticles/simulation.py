@@ -1,3 +1,4 @@
+from typing import Callable
 from time import perf_counter_ns
 from .fields import Fields
 from .particles import Particles, c
@@ -19,6 +20,7 @@ class Simulation(object):
     ) -> None:
         '''
         set up a simulation.
+
         Parameters
         ----------
         all_particles : list[Particle]
@@ -69,7 +71,21 @@ class Simulation(object):
                 self.particles_push.append(p)
 
 
-    def start(self, nstep, total=None):
+    def start(self, nstep: int, total: int=None, call_back: Callable[[int], None]=None):
+        '''
+        start simulation
+
+        Parameters
+        ----------
+        nstep: int
+            number of simulation steps of this run
+
+        total: int
+            total number of simulation steps
+
+        call_back: Callable[[int], None]
+            call back function, called at each iteration. accepts `istep` as input.
+        '''
         if total is None:
             total = nstep
 
@@ -121,6 +137,8 @@ class Simulation(object):
                 particles._push_position(0.5*self.dt)
             
             
+            call_back(istep)
+
             self.t += self.dt
             self.step += 1
             if self.print_every is None:
