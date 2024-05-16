@@ -137,7 +137,8 @@ class Simulation(object):
                 particles._push_position(0.5*self.dt)
             
             
-            call_back(istep)
+            if call_back:
+                call_back(istep)
 
             self.t += self.dt
             self.step += 1

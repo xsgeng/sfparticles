@@ -66,7 +66,7 @@ class Fields(object):
 # def check_field_function():
 #     pass
 
-def simple_laser_pulse(a0, w0, ctau, direction=1,  x0=0, wavelength=0.8e-6, pol_angle=0, cep=0):
+def simple_laser_pulse(a0, w0, ctau, t_order=2, direction=1,  x0=0, wavelength=0.8e-6, pol_angle=0, cep=0):
     '''
     Simple laser pulse without focusing.
 
@@ -104,7 +104,7 @@ def simple_laser_pulse(a0, w0, ctau, direction=1,  x0=0, wavelength=0.8e-6, pol_
         r2 = y**2 + z**2
         phi = k0*(x - direction*x0 - c*t)
 
-        E = E0 * cos(phi + cep) * exp(-r2/w0**2) * exp(-phi**2 / (k0*ctau)**2)
+        E = E0 * cos(phi + cep) * exp(-r2/w0**2) * exp(-phi**t_order / (k0*ctau)**t_order)
         Ex = 0.0
         Ey = E * cos(pol_angle)
         Ez = E * sin(pol_angle)
