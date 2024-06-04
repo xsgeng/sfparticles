@@ -8,4 +8,16 @@ dependencies = [
     "h5py",
     "tqdm",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
+description = "Calculating the radiation spectrum of relativistic particles using the Lienard-Wiechert potential."
+authors = [
+  {name = "xsgeng", email = "xsgeng@siom.ac.cn"}
+]
+license = {file = "LICENSE"}
+readme = "README.md"
+keywords = ["Plasma Physics", "Strong field"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3.9",
+]
