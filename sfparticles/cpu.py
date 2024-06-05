@@ -190,8 +190,8 @@ def create_pair(
         photon_to_be_pruned[idx_src] = True
         
          
-@njit(int64[:](boolean[:], int64))
-def find_event_index(event, N_event):
+@njit(int64[:](boolean[:], int64, int64))
+def find_event_index(event, N_event, N):
     '''
     find an event index given an event array.
     
@@ -209,16 +209,16 @@ def find_event_index(event, N_event):
     '''
     event_index = zeros(N_event, dtype='int64')
     idx = 0
-    for i in range(event.size):
+    for i in range(N):
         if event[i]:
             event_index[idx] = i
             idx += 1
     return event_index
 
-@njit(int64(boolean[:]))
-def bool_sum(event):
+@njit(int64(boolean[:], int64))
+def bool_sum(event, N):
     ntotal = 0
-    for ip in prange(event.size):
+    for ip in prange(N):
         if event[ip]:
             ntotal += 1
 

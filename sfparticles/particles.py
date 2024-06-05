@@ -165,7 +165,7 @@ class Particles(object):
         '''
         Count number of particles
         '''
-        return self.buffer_size - int(bool_sum(self._to_be_pruned))
+        return self.N_buffered - int(bool_sum(self._to_be_pruned, self.N_buffered))
 
     @property
     def gamma(self):
@@ -284,7 +284,7 @@ class Particles(object):
 
     def _photon_event(self, dt):
         if _use_optical_depth:
-            update_tau_e(self.tau, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.photon_delta)
+            update_tau_e(self.tau, self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta)
         else:
             photon_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta )
         return self.event, self.photon_delta
@@ -292,7 +292,7 @@ class Particles(object):
     
     def _pair_event(self, dt):
         if _use_optical_depth:
-            update_tau_gamma(self.tau, self.inv_gamma, self.chi, dt, self.buffer_size, self._to_be_pruned, self.event, self.pair_delta)
+            update_tau_gamma(self.tau, self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta)
         else:
             pair_from_rejection_sampling(self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta )
         return self.event, self.pair_delta
@@ -303,14 +303,14 @@ class Particles(object):
         
         
     def _create_photon(self, pho):
-        N_photon = int(bool_sum(self.event))
+        N_photon = int(bool_sum(self.event, self.N_buffered))
         if N_photon == 0:
             return
 
         
         if hasattr(self, 'photon_ref'):
             # events are already false when marked as pruned in QED
-            event_index = find_event_index(self.event, N_photon)
+            event_index = find_event_index(self.event, N_photon, self.N_buffered)
             pho._extend(N_photon)
             
             create_photon(
@@ -327,14 +327,14 @@ class Particles(object):
             photon_recoil(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
 
     def _create_pair(self, ele, pos):
-        N_pair = int(bool_sum(self.event))
+        N_pair = int(bool_sum(self.event, self.N_buffered))
         if N_pair == 0:
             return
         
         
         if hasattr(self, 'bw_electron_ref'):
             # events are already false when marked as pruned in QED and extend methods
-            event_index = find_event_index(self.event, N_pair)
+            event_index = find_event_index(self.event, N_pair, self.N_buffered)
             
             ele._extend(N_pair)
             pos._extend(N_pair)
