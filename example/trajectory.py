@@ -58,14 +58,16 @@ def simulate(N=1, RR=RadiationReactionType.LL):
     ux = np.zeros(trajectory_size)
     uy = np.zeros(trajectory_size)
     uz = np.zeros(trajectory_size)
-    for i in range(step):
-        sim.start(1)
-        x[i, :] = electrons.x
-        y[i, :] = electrons.y
-        z[i, :] = electrons.z
-        ux[i, :] = electrons.ux
-        uy[i, :] = electrons.uy
-        uz[i, :] = electrons.uz
+    
+    def store_trajectory(i):
+        x[i] = electrons.x
+        y[i] = electrons.y
+        z[i] = electrons.z
+        ux[i] = electrons.ux
+        uy[i] = electrons.uy
+        uz[i] = electrons.uz
+
+    sim.start(step, call_back=store_trajectory)
 
     return t, x, y, z, ux, uy, uz
 

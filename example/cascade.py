@@ -14,7 +14,7 @@ l0 = 0.8*um
 omega0 = 2*pi*c / l0
 k0 = omega0 / c
 
-a0 = 1000.0
+a0 = 700.0
 w0 = 5*um
 ctau = 5*um
 
@@ -47,6 +47,11 @@ electrons = Particles('electron', q=-1, m=1, N=N, props=init(N))
 photons.set_pair(electrons, positrons)
 electrons.set_photon(photons)
 positrons.set_photon(photons)
+
+# pre-allocate memory to reduce allocation overhead
+# photons._extend(100000000)
+# electrons._extend(10000000)
+# positrons._extend(10000000)
 
 sim = Simulation(electrons, positrons, photons, dt=dt, fields=laser, print_every=1, photon_threshold=20)
 sim.start(step)
