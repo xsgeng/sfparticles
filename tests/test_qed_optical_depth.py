@@ -1,9 +1,21 @@
 import os
-os.environ['SFPARTICLES_OPTICAL_DEPTH'] = '1'
+import sys
 
-from test_qed import TestPairNumber, TestPhotonNumber 
+os.environ['SFPARTICLES_OPTICAL_DEPTH'] = '1'
+del sys.modules['sfparticles.qed']
+del sys.modules['sfparticles.particles']
+    
+from test_qed import TestPairNumber, TestPhotonNumber
+from sfparticles.particles import _use_optical_depth
+
 
 class TestPairNumberOD(TestPairNumber):
-    pass
+    def setUp(self) -> None:
+        self.assertTrue(_use_optical_depth)
+        super().setUp()
+        
+        
 class TestPhotonNumberOD(TestPhotonNumber):
-    pass
+    def setUp(self) -> None:
+        self.assertTrue(_use_optical_depth)
+        super().setUp()

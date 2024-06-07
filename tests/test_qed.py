@@ -1,9 +1,5 @@
-from time import perf_counter
 import unittest
-from scipy.special import airy
-from scipy.integrate import quad_vec, quad
-from scipy.constants import alpha, m_e, c, hbar, e
-from numba import njit, prange, jit
+from scipy.constants import m_e, c, hbar, e
 import numpy as np
 
 from sfparticles.particles import Particles

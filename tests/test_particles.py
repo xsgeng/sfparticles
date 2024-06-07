@@ -1,10 +1,8 @@
 import unittest
-
-import sfparticles
 from scipy.constants import e, m_e, c, pi
 import numpy as np
 
-from sfparticles import Particles
+from sfparticles import Particles, SpinParticles
 from itertools import product
 
 from sfparticles.particles import RadiationReactionType
@@ -38,8 +36,7 @@ class TestParticlesInit(unittest.TestCase):
             ele.set_photon(pho)
 
     def test_spin_init(self):
-        p = Particles('e', q=-1, m=1, N=2, has_spin=True)
-        self.assertTrue(p.has_spin)
+        p = SpinParticles('e', q=-1, m=1, N=2)
 
         self.assertTrue(hasattr(p, 'sx'))
         self.assertTrue(hasattr(p, 'sy'))
@@ -81,7 +78,7 @@ class TestParticleResize(unittest.TestCase):
         N = 5
         N_new1 = 10
         N_new2 = 30
-        e = Particles('e', -1, 1, N, has_spin=True)
+        e = Particles('e', -1, 1, N)
         pho = Particles('pho', 0, 0)
         e.set_photon(pho)
 
@@ -94,13 +91,6 @@ class TestParticleResize(unittest.TestCase):
         self.assertEqual(e.N_buffered, N)
         self.assertEqual(e.buffer_size, (int(N/4) + N + N_new1) + int(N/4) + N_new2 )
 
-
-        attrs = [prop + i for prop, i in product(['', 'u', 's', 'E', 'B'], ['x', 'y', 'z'])] + \
-            ['inv_gamma', '_to_be_pruned', 'event', 'photon_delta', 'event_index']
-        for attr in attrs:
+        for attr in e.attrs:
             with self.subTest(attr):
                 self.assertEqual(len(getattr(e, attr)), e.buffer_size)
-
-
-        
-
