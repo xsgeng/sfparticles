@@ -9,7 +9,7 @@ dependencies = [
     "tqdm",
 ]
 requires-python = ">=3.9"
-description = "Calculating the radiation spectrum of relativistic particles using the Lienard-Wiechert potential."
+description = "Simulation toolkit for particle tracking in strong fields."
 authors = [
   {name = "xsgeng", email = "xsgeng@siom.ac.cn"}
 ]
