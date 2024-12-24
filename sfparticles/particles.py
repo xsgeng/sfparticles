@@ -26,11 +26,13 @@ else:
 
 class RadiationReactionType(Enum):
     """
-    辐射反作用类型
-    `None` : 无辐射反作用
-    `photon` : 光子产生辐射反作用
-    `LL` : approximated Landau-Lifshitz equation for gamma >> 1
-    `cLL` : quantum-corrected Landau-Lifshitz equation
+    Radiation reaction type enumeration.
+    
+    Values:
+        NONE: No radiation reaction
+        PHOTON: Radiation reaction through photon emission
+        LL: Approximated Landau-Lifshitz equation for gamma >> 1
+        CLL: Quantum-corrected Landau-Lifshitz equation
     """
     NONE = auto()
     PHOTON = auto()
@@ -54,25 +56,24 @@ class Particles(object):
         parameters
         ----------
 
-        `q` : int
-            电荷，正负电子分别为±1
-        `m` : float
-            质量，以电子质量为单位
-        `N` : int
-            粒子数
-        `props` : Tuple(x, y, z, ux, uy, uz, [sx, sy, sz])
-            粒子的初始状态，可包含自旋矢量。如果`has_spin=True`且未给出sx, sy, sz，默认sz=1
-            这些属性向量的长度为buffer的长度，前N个为粒子的属性。
-        `RR` : RadiationReactionType or None
-            辐射反作用类型。对m=0光子无效。
-                `None` : 无RR
-                `RadiationReactionType.photon` : 光子产生辐射反作用
-                `RadiationReactionType.LL` : LL方程
-                `RadiationReactionType.cLL` : 量子修正的LL方程
-        `has_spin` : bool
-            是否包含自旋
-        `push` : Bool
-            是否模拟该粒子的运动, 默认True
+        q : int
+            Charge in units of electron charge (±1 for electrons/positrons)
+        m : float
+            Mass in units of electron mass
+        N : int
+            Number of particles
+        props : Tuple(x, y, z, ux, uy, uz, [sx, sy, sz])
+            Initial particle state, can include spin vectors.
+            These property vectors have length equal to the buffer length,
+            with the first N elements being active particle properties.
+        RR : RadiationReactionType
+            Radiation reaction type. Invalid for photons (m=0).
+            NONE: No radiation reaction
+            PHOTON: Radiation reaction through photon emission
+            LL: Landau-Lifshitz equation
+            CLL: Quantum-corrected Landau-Lifshitz equation
+        push : bool, default=True
+            Whether to simulate particle motion
         """
         self.name = name
         self.q = q * e
@@ -144,40 +145,59 @@ class Particles(object):
         self._to_be_pruned = np.full(N, False)
         self.attrs += ['_to_be_pruned']
 
-    def _to_gpu(self):
-        '''
-        send data to gpu
-        '''
+    def _to_gpu(self) -> None:
+        """
+        Transfer particle data to GPU memory.
+        Only executed if GPU support is enabled.
+        """
         if _use_gpu:
             for attr in self.attrs:
                 setattr(self, attr, cp.asarray(getattr(self, attr)))
         
-    def _to_host(self):
-        '''
-        send data to host
-        '''
+    def _to_host(self) -> None:
+        """
+        Transfer particle data from GPU back to host memory.
+        Only executed if GPU support is enabled.
+        """
         if _use_gpu:
             for attr in self.attrs:
                 setattr(self, attr, getattr(self, attr).get())
         
     @property
-    def Npart(self):
-        '''
-        Count number of particles
-        '''
+    def Npart(self) -> int:
+        """
+        Get the current number of active particles.
+        
+        Returns:
+            Number of particles that are not marked for pruning
+        """
         return self.N_buffered - int(bool_sum(self._to_be_pruned, self.N_buffered))
 
     @property
-    def gamma(self):
-        '''
-        Photon gamma factor
-        '''
+    def gamma(self) -> float:
+        """
+        Get the relativistic gamma factor.
+        
+        Returns:
+            Gamma factor (1/sqrt(1-v^2/c^2)) for massive particles
+            or energy/mc^2 for photons
+        """
         return 1.0 / self.inv_gamma
 
-    def set_photon(self, photon):
-        '''
-        set photon properties
-        '''
+    def set_photon(self, photon: 'Particles') -> None:
+        """
+        Configure particle for photon emission.
+        
+        Sets up the necessary arrays and references for tracking
+        photon emission events from this particle.
+        
+        Args:
+            photon: Particles instance that will store emitted photons
+            
+        Raises:
+            AssertionError: If particle is massless or using LL/CLL radiation
+            reaction, or if photon particle properties are invalid
+        """
         assert self.m > 0, 'photon cannot radiate photon'
         assert self.RR != RadiationReactionType.LL and self.RR != RadiationReactionType.CLL, 'LL equation does not radiate photon'
         assert isinstance(photon, Particles), 'photon must be Particle class'
@@ -192,10 +212,21 @@ class Particles(object):
             self.attrs += ['tau']
         
         
-    def set_pair(self, electron, positron):
-        '''
-        Set pair properties
-        '''
+    def set_pair(self, electron: 'Particles', positron: 'Particles') -> None:
+        """
+        Configure photon for electron-positron pair production.
+        
+        Sets up the necessary arrays and references for tracking
+        pair production events from this photon.
+        
+        Args:
+            electron: Particles instance that will store produced electrons
+            positron: Particles instance that will store produced positrons
+            
+        Raises:
+            AssertionError: If particle is massive or if electron/positron
+            properties are invalid
+        """
         assert self.m == 0, 'massive particle cannot create BW pair'
         assert isinstance(electron, Particles) and isinstance(positron, Particles), 'pair must be tuple or list of Particle class'
         assert electron.m == m_e and electron.q == -e, f'first of the pair must be electron'
@@ -210,10 +241,16 @@ class Particles(object):
             self.tau = np.zeros(self.buffer_size)
             self.attrs += ['tau']
         
-    def _push_momentum(self, dt):
-        '''
-        Push particle momentum
-        '''
+    def _push_momentum(self, dt: float) -> None:
+        """
+        Update particle momentum using the Boris pusher algorithm.
+        
+        For massive particles, applies the Boris algorithm and optionally
+        radiation reaction effects based on the RR type.
+        
+        Args:
+            dt: Time step in seconds
+        """
         if self.m == 0:
             return
         boris(
@@ -244,7 +281,13 @@ class Particles(object):
             )
 
 
-    def _push_position(self, dt):
+    def _push_position(self, dt: float) -> None:
+        """
+        Update particle positions based on their momenta.
+        
+        Args:
+            dt: Time step in seconds
+        """
         push_position(
             self.x, self.y, self.z, 
             self.ux, self.uy, self.uz, 
@@ -253,10 +296,17 @@ class Particles(object):
         )
 
 
-    def _eval_field(self, fields : Fields, t):
-        '''
-        Evaluate EM fields at particle position
-        '''
+    def _eval_field(self, fields: Fields, t: float) -> None:
+        """
+        Evaluate electromagnetic fields at particle positions.
+        
+        Uses the provided Fields object to calculate E and B fields
+        at each particle's position, handling both CPU and GPU implementations.
+        
+        Args:
+            fields: Fields object containing field calculation functions
+            t: Current simulation time in seconds
+        """
         if _use_gpu:
             from .gpu import tpb
             bpg = int(self.N_buffered / tpb) + 1
@@ -273,7 +323,14 @@ class Particles(object):
             )
 
 
-    def _calculate_chi(self):
+    def _calculate_chi(self) -> None:
+        """
+        Calculate quantum parameter chi for each particle.
+        
+        Updates the chi array using current particle momenta
+        and electromagnetic fields. Chi represents the quantum
+        nonlinearity parameter that determines QED effects.
+        """
         update_chi(
             self.Ex, self.Ey, self.Ez, 
             self.Bx, self.By, self.Bz, 
@@ -282,7 +339,21 @@ class Particles(object):
         )
 
 
-    def _photon_event(self, dt):
+    def _photon_event(self, dt: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate photon emission events.
+        
+        Uses either optical depth tables or rejection sampling
+        to determine photon emission events and energies.
+        
+        Args:
+            dt: Time step in seconds
+            
+        Returns:
+            Tuple containing:
+            - Boolean array of emission events
+            - Array of photon energy fractions
+        """
         if _use_optical_depth:
             update_tau_e(self.tau, self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.photon_delta)
         else:
@@ -290,7 +361,21 @@ class Particles(object):
         return self.event, self.photon_delta
 
     
-    def _pair_event(self, dt):
+    def _pair_event(self, dt: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate pair production events.
+        
+        Uses either optical depth tables or rejection sampling
+        to determine pair production events and energy sharing.
+        
+        Args:
+            dt: Time step in seconds
+            
+        Returns:
+            Tuple containing:
+            - Boolean array of pair production events
+            - Array of energy sharing fractions
+        """
         if _use_optical_depth:
             update_tau_gamma(self.tau, self.inv_gamma, self.chi, dt, self.N_buffered, self._to_be_pruned, self.event, self.pair_delta)
         else:
@@ -298,11 +383,30 @@ class Particles(object):
         return self.event, self.pair_delta
 
     
-    def _pick_hard_photon(self, threshold=2.0):
+    def _pick_hard_photon(self, threshold: float = 2.0) -> None:
+        """
+        Filter photon emission events based on energy threshold.
+        
+        Only keeps emission events where the photon energy exceeds
+        the threshold times the particle energy.
+        
+        Args:
+            threshold: Minimum ratio of photon to particle energy
+        """
         pick_hard_photon(self.event, self.photon_delta, self.inv_gamma, threshold, self.N_buffered)
         
         
-    def _create_photon(self, pho):
+    def _create_photon(self, pho: 'Particles') -> None:
+        """
+        Create new photon particles from emission events.
+        
+        For each emission event, creates a new photon with appropriate
+        energy and momentum, and applies recoil to the emitting particle
+        if radiation reaction is enabled.
+        
+        Args:
+            pho: Particles instance to store the created photons
+        """
         N_photon = int(bool_sum(self.event, self.N_buffered))
         if N_photon == 0:
             return
@@ -326,7 +430,17 @@ class Particles(object):
         if self.RR == RadiationReactionType.PHOTON:
             photon_recoil(self.ux, self.uy, self.uz, self.inv_gamma, self.event, self.photon_delta, self.N_buffered, self._to_be_pruned)
 
-    def _create_pair(self, ele, pos):
+    def _create_pair(self, ele: 'Particles', pos: 'Particles') -> None:
+        """
+        Create electron-positron pairs from pair production events.
+        
+        For each pair production event, creates an electron and positron
+        with appropriate energy sharing and momentum conservation.
+        
+        Args:
+            ele: Particles instance to store created electrons
+            pos: Particles instance to store created positrons
+        """
         N_pair = int(bool_sum(self.event, self.N_buffered))
         if N_pair == 0:
             return
@@ -359,8 +473,17 @@ class Particles(object):
             pos.N_buffered += N_pair
             
 
-    def _extend(self, N_new):
-        # extend buffer
+    def _extend(self, N_new: int) -> None:
+        """
+        Extend particle arrays to accommodate new particles.
+        
+        Increases the buffer size if needed and initializes new
+        array elements appropriately. Growth strategy adds 25%
+        plus requested new particles.
+        
+        Args:
+            N_new: Number of new particle slots needed
+        """
         if (self.buffer_size - self.N_buffered) < N_new:
             buffer_size_new = self.buffer_size + int(self.N_buffered/4) + N_new
 
@@ -377,10 +500,14 @@ class Particles(object):
             self.buffer_size = buffer_size_new
             
 
-    def _prune(self):
-        '''
-        call after copy to host if use gpu.
-        '''
+    def _prune(self) -> None:
+        """
+        Remove deleted particles and compact arrays.
+        
+        Filters out particles marked for deletion and resizes
+        arrays to contain only active particles. Must be called
+        after copying data from GPU if GPU support is enabled.
+        """
         selected = ~self._to_be_pruned
         for attr in self.attrs:
             setattr(self, attr, (getattr(self, attr))[selected])
@@ -389,6 +516,17 @@ class Particles(object):
         self.N_buffered = N
 
 class SpinParticles(Particles):
+    """
+    Particle class that includes spin dynamics.
+    
+    Extends the base Particles class to include spin vectors and
+    spin-dependent equations of motion using the 
+    Boris-Thomas-BMT algorithm.
+    
+    Attributes:
+        sx, sy, sz: Spin vector components
+        ae: Anomalous magnetic moment (g-2)/2
+    """
     def __init__(
         self, 
         name: str, 
@@ -400,6 +538,22 @@ class SpinParticles(Particles):
         ae: float = 1.14e-3, 
         push: bool = True
     ) -> None:
+        """
+        Initialize a SpinParticles object.
+        
+        In addition to the base Particles parameters, includes
+        spin vectors and anomalous magnetic moment.
+        
+        Args:
+            name: Particle name identifier
+            q: Charge in units of electron charge
+            m: Mass in units of electron mass
+            N: Number of particles
+            props: Tuple of 9 components (x,y,z, ux,uy,uz, sx,sy,sz)
+            RR: Radiation reaction type
+            ae: Anomalous magnetic moment, defaults to electron value
+            push: Whether to simulate particle motion
+        """
         if props is None:
             if m == 0:
                 assert N == 0, "cannot initialize photons with only N without props."
@@ -418,10 +572,16 @@ class SpinParticles(Particles):
         self.attrs += ['sx', 'sy', 'sz']
 
 
-    def _push_momentum(self, dt):
-        '''
-        Push particle momentum
-        '''
+    def _push_momentum(self, dt: float) -> None:
+        """
+        Update particle momentum including spin effects.
+        
+        Uses the Boris-Thomas-BMT algorithm to evolve both
+        momentum and spin vectors in electromagnetic fields.
+        
+        Args:
+            dt: Time step in seconds
+        """
         if self.m == 0:
             return
         boris_tbmt(
@@ -443,7 +603,23 @@ class SpinParticles(Particles):
                 self.N_buffered, self._to_be_pruned, dt
             )
 
-def prepare_props(props, N):
+def prepare_props(props: Tuple, N: int) -> list:
+    """
+    Prepare particle property arrays from input data.
+    
+    Converts various input formats (arrays, scalars, lists) into
+    properly sized numpy arrays for particle properties.
+    
+    Args:
+        props: Tuple of property values in various formats
+        N: Number of particles
+        
+    Returns:
+        List of numpy arrays containing particle properties
+        
+    Raises:
+        AssertionError: If property dimensions don't match N
+    """
     props_ = []
     for prop in props:
         if isinstance(prop, np.ndarray):
