@@ -199,7 +199,7 @@ def pair_prob_rate_total(chi_N=256, log_chi_min=-3, log_chi_max=2):
 def table_gen(
     table_path, 
     chi_N=256, log_chi_min=-3.0, log_chi_max=2.0, 
-    delta_N=1024, log_delta_min=-3,
+    delta_N=1024, log_delta_min=-6,
 ):
     with h5py.File(os.path.join(table_path, 'optical_depth_tables.h5'), 'w') as h5f:
 
