@@ -72,7 +72,8 @@ def _bisect_interp(chi, table2d):
     k = (table2d[chi_idx_high, -1] - table2d[chi_idx_low, -1]) / (chi_high - chi_low)
     ymax = table2d[chi_idx_low, -1] + k * (chi - chi_low)
 
-    # lower than ymin are ignored
+    # lower than ymin are ignored, NOTE: too large ymin may cause
+    # higher number
     r = np.random.rand() * (ymax-ymin) + ymin
     while low <= high:
         mid = int((low + high)/2)
@@ -93,11 +94,12 @@ def _bisect_interp(chi, table2d):
     k = (table2d[chi_idx_high, delta_idx+1] - table2d[chi_idx_low, delta_idx+1]) / (chi_high - chi_low)
     y2 = table2d[chi_idx_low, delta_idx+1] + k * (chi - chi_low)
 
-    k = _log_delta_delta / (y2 - y1)
-    log_delta_left = _log_delta_range[0] + delta_idx*_log_delta_delta
-    log_delta = log_delta_left + k * (r - y1)   
+    delta_left = 10**(_log_delta_range[0] + delta_idx*_log_delta_delta)
+    delta_right = 10**(_log_delta_range[0] + (delta_idx+1)*_log_delta_delta)
+    k = (delta_right - delta_left) / (y2 - y1)
+    delta = delta_left + k * (r - y1)
 
-    return 10**log_delta
+    return delta
     
 
 @njit
