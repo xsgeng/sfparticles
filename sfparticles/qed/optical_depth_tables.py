@@ -1,15 +1,14 @@
 
+import math
+import multiprocessing
 import os
 
-import numpy as np
-from numba import njit, cfunc
-import math
-from scipy.constants import alpha, pi, m_e, hbar, c
-from scipy.special import airy
-from scipy.integrate import quad
 import h5py
-import multiprocessing
-
+import numpy as np
+from numba import njit
+from scipy.constants import alpha, c, hbar, m_e, pi
+from scipy.integrate import quad
+from scipy.special import airy
 
 # built-in tables
 table_path = os.path.join(os.path.dirname(__file__), 'optical_depth_tables.h5')
@@ -26,8 +25,8 @@ if os.path.exists(table_path) and __name__ == "sfparticles.qed.optical_depth_tab
         _log_chi_range = f.attrs['log_chi_range']
         _log_chi_delta = f.attrs['log_chi_delta']
         _delta_N = f.attrs['delta_N']
-        _log_delta_range = f.attrs['log_delta_range']
-        _log_delta_delta = f.attrs['log_delta_delta']
+        _delta_range = f.attrs['delta_range']
+        _A = f.attrs['A']
 
     del f
 
@@ -72,14 +71,14 @@ def _bisect_interp(chi, table2d):
     k = (table2d[chi_idx_high, -1] - table2d[chi_idx_low, -1]) / (chi_high - chi_low)
     ymax = table2d[chi_idx_low, -1] + k * (chi - chi_low)
 
-    # lower than ymin are ignored, NOTE: too large ymin may cause
-    # higher number
-    r = np.random.rand() * (ymax-ymin) + ymin
+    # lower than ymin are ignored
+    r = np.random.rand() * ymax
+    if r < ymin:
+        return 0.0
     while low <= high:
         mid = int((low + high)/2)
         k = (table2d[chi_idx_high, mid] - table2d[chi_idx_low, mid]) / (chi_high - chi_low)
         mid_delta = table2d[chi_idx_low, mid] + k * (chi - chi_low)
-
         if mid_delta < r:
             low = mid + 1
         elif mid_delta > r:
@@ -94,12 +93,11 @@ def _bisect_interp(chi, table2d):
     k = (table2d[chi_idx_high, delta_idx+1] - table2d[chi_idx_low, delta_idx+1]) / (chi_high - chi_low)
     y2 = table2d[chi_idx_low, delta_idx+1] + k * (chi - chi_low)
 
-    delta_left = 10**(_log_delta_range[0] + delta_idx*_log_delta_delta)
-    delta_right = 10**(_log_delta_range[0] + (delta_idx+1)*_log_delta_delta)
+    delta_left  = 1 / (1 + np.exp(-_A * (-1 + 2/(_delta_N-1)* delta_idx   )))
+    delta_right = 1 / (1 + np.exp(-_A * (-1 + 2/(_delta_N-1)*(delta_idx+1))))
     k = (delta_right - delta_left) / (y2 - y1)
-    delta = delta_left + k * (r - y1)
 
-    return delta
+    return delta_left + k * (r - y1)
     
 
 @njit
@@ -167,9 +165,12 @@ def integral_pair_prob_over_delta(chi_gamma):
     prob_rate_total, _ = quad(P, 0, 1)
     return prob_rate_total
 
-def integral_photon_prob_along_delta(chi_e, delta_N, log_delta_min):
+def integral_photon_prob_along_delta(chi_e, delta_N, delta_min):
     P = gen_photon_prob_rate_for_delta(chi_e)
-    delta = np.logspace(log_delta_min, 0, delta_N)
+
+    A = np.log(1/delta_min - 1)
+    X = np.linspace(-1, 1, delta_N)
+    delta = 1 / (1 + np.exp(-A*X))
     integ = np.zeros(delta_N)
     # 积分从delta_min开始
     integ[0] = quad(P, 0, delta[0])[0]
@@ -177,9 +178,13 @@ def integral_photon_prob_along_delta(chi_e, delta_N, log_delta_min):
         integ[i] = integ[i-1] + P(delta[i]) * (delta[i] - delta[i-1])
     return integ
 
-def integral_pair_prob_along_delta(chi_gamma, delta_N, log_delta_min):
+def integral_pair_prob_along_delta(chi_gamma, delta_N, delta_min):
     P = gen_pair_prob_rate_for_delta(chi_gamma)
-    delta = np.logspace(log_delta_min, 0, delta_N)
+
+    A = np.log(1/delta_min - 1)
+    X = np.linspace(-1, 1, delta_N)
+    delta = 1 / (1 + np.exp(-A*X))
+
     integ = np.zeros(delta_N)
     # 积分从delta_min开始
     integ[0] = quad(P, 0, delta[0])[0]
@@ -200,8 +205,8 @@ def pair_prob_rate_total(chi_N=256, log_chi_min=-3, log_chi_max=2):
 
 def table_gen(
     table_path, 
-    chi_N=256, log_chi_min=-3.0, log_chi_max=2.0, 
-    delta_N=1024, log_delta_min=-6,
+    chi_N=128, log_chi_min=-3.0, log_chi_max=2.0, 
+    delta_N=128, delta_min=5e-5,
 ):
     with h5py.File(os.path.join(table_path, 'optical_depth_tables.h5'), 'w') as h5f:
 
@@ -214,20 +219,20 @@ def table_gen(
         chi = np.logspace(log_chi_min, log_chi_max, chi_N)
         print("计算不同chi_e辐射概率的积分")
         with multiprocessing.Pool() as pool:
-            integ = pool.starmap(integral_photon_prob_along_delta, zip(chi, [delta_N]*chi_N, [log_delta_min]*chi_N))
+            integ = pool.starmap(integral_photon_prob_along_delta, zip(chi, [delta_N]*chi_N, [delta_min]*chi_N))
         h5f.create_dataset('integral_photon_prob_along_delta', data=integ)
 
         print("计算不同chi_gamma电子对概率的积分")
         with multiprocessing.Pool() as pool:
-            integ = pool.starmap(integral_pair_prob_along_delta, zip(chi, [delta_N]*chi_N, [log_delta_min]*chi_N))
+            integ = pool.starmap(integral_pair_prob_along_delta, zip(chi, [delta_N]*chi_N, [delta_min]*chi_N))
         h5f.create_dataset('integral_pair_prob_along_delta', data=integ)
 
         h5f.attrs['chi_N'] = chi_N
         h5f.attrs['log_chi_range'] = (log_chi_min, log_chi_max)
         h5f.attrs['log_chi_delta'] = (log_chi_max - log_chi_min) / (chi_N - 1)
         h5f.attrs['delta_N'] = delta_N
-        h5f.attrs['log_delta_range'] = (log_delta_min, 0)
-        h5f.attrs['log_delta_delta'] = (0 - log_delta_min) / (delta_N - 1)
+        h5f.attrs['delta_range'] = (delta_min, 1-delta_min)
+        h5f.attrs['A'] = np.log(1/delta_min - 1)
 
 
 if __name__ == '__main__':
