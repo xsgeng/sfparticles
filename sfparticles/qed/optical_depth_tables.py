@@ -71,10 +71,12 @@ def _bisect_interp(chi, table2d):
     k = (table2d[chi_idx_high, -1] - table2d[chi_idx_low, -1]) / (chi_high - chi_low)
     ymax = table2d[chi_idx_low, -1] + k * (chi - chi_low)
 
-    # lower than ymin are ignored
     r = np.random.rand() * ymax
+    # linear interp for r < ymin
     if r < ymin:
-        return 0.0
+        return r/ymin * _delta_range[0]
+    
+    # bisect search
     while low <= high:
         mid = int((low + high)/2)
         k = (table2d[chi_idx_high, mid] - table2d[chi_idx_low, mid]) / (chi_high - chi_low)
