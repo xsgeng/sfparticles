@@ -134,7 +134,8 @@ def int_Ai(z):
 def gen_photon_prob_rate_for_delta(chi_e):
     factor = -alpha*m_e*c**2/hbar
     def prob_(delta):
-        if delta == 1.0: return 0.0
+        if delta == 1.0: 
+            return 0.0
         chi_gamma = delta * chi_e
         chi_ep = chi_e - chi_gamma
         z = (chi_gamma/chi_e/chi_ep)**(2/3)
@@ -145,7 +146,8 @@ def gen_photon_prob_rate_for_delta(chi_e):
 def gen_pair_prob_rate_for_delta(chi_gamma):
     factor = alpha*m_e*c**2/hbar
     def prob_(delta):
-        if delta == 1.0: return 0.0
+        if delta == 1.0: 
+            return 0.0
         chi_e = delta * chi_gamma
         chi_ep = chi_gamma - chi_e
         z = (chi_gamma/chi_e/chi_ep)**(2/3)
