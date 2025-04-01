@@ -1,16 +1,24 @@
 import unittest
-from scipy.constants import m_e, c, hbar, e
-import numpy as np
 
-from sfparticles.particles import Particles
+import numpy as np
+from scipy.constants import c, e, hbar, m_e
+
 from sfparticles.fields import static_field
-from sfparticles.qed.optical_depth_tables import integral_photon_prob_over_delta, integral_pair_prob_over_delta
+from sfparticles.particles import Particles
+from sfparticles.qed.optical_depth_tables import (
+    gen_pair_prob_rate_for_delta,
+    gen_photon_prob_rate_for_delta,
+    integral_pair_prob_over_delta,
+    integral_photon_prob_over_delta,
+)
+from sfparticles.particles import RadiationReactionType
+
 
 class TestPhotonNumber(unittest.TestCase):
     def setUp(self) -> None:
         self.gamma = 10000
         ux = np.sqrt(self.gamma**2 - 1)
-        self.N = 1_000_000
+        self.N = 10_000_000
         
         self.ele = Particles(
             'ele', -1, 1, N=self.N,
@@ -18,6 +26,7 @@ class TestPhotonNumber(unittest.TestCase):
                 np.zeros(self.N), np.zeros(self.N), np.zeros(self.N), 
                 np.full(self.N, ux), np.zeros(self.N), np.zeros(self.N), 
             ),
+            RR=RadiationReactionType.NONE
         )
         
         self.Bfield_from_chi = lambda chi_e : static_field(Bz=chi_e * m_e**2*c**2/e/hbar / ux)
@@ -59,30 +68,44 @@ class TestPhotonNumber(unittest.TestCase):
         self.assertTrue((pho.gamma > 2.0).all())
         
     def test_photon_number(self):
-        interval = 1e-17
-        tau = interval / self.gamma
+        
         for chi_e in [0.1, 0.5, 1.0, 2.0, 5.0]:
+            interval = 1e-17 / chi_e
+            tau = interval / self.gamma
+
+            Bfield = self.Bfield_from_chi(chi_e)
+            
+            ele = self.ele
+            pho = Particles('pho', 0, 0)
+            ele.set_photon(pho)
+            
+            ele._eval_field(Bfield, 0)
+            ele._calculate_chi()
+            
+            
+            ele._photon_event(interval)
+            ele._create_photon(pho)
+            n_photon = pho.Npart
+            
+            prob_rate_total = integral_photon_prob_over_delta(chi_e) * tau
+            n_photon_expected = prob_rate_total * self.N
+            sigma = np.sqrt(n_photon_expected * (1 - prob_rate_total))
+            tor = 3*sigma
             with self.subTest(chi_e=chi_e):
-                Bfield = self.Bfield_from_chi(chi_e)
-                
-                ele = self.ele
-                pho = Particles('pho', 0, 0)
-                ele.set_photon(pho)
-                
-                ele._eval_field(Bfield, 0)
-                ele._calculate_chi()
-                
-                
-                ele._photon_event(interval)
-                ele._create_photon(pho)
-                n_photon = pho.Npart
-                
-                prob_rate_total = integral_photon_prob_over_delta(chi_e) * tau
-                n_photon_expected = prob_rate_total * self.N
-                sigma = np.sqrt(n_photon_expected * (1 - prob_rate_total))
-                tor = 3*sigma
 
                 self.assertLess(abs(n_photon-n_photon_expected), tor, f'n_photon={n_photon}, n_photon_expected={n_photon_expected}')
+            
+            for delta in [0.01, 0.1]:
+                with self.subTest(chi_e=chi_e, bin=[delta, delta+0.01]):
+                    n_photon_bin = np.histogram(pho.ux/self.gamma, bins=[delta, delta+0.01])[0]
+                    prob_rate = gen_photon_prob_rate_for_delta(chi_e)
+                    prob_rate_bin = (prob_rate(delta) + prob_rate(delta+0.01))*0.01/2 * tau
+
+                    n_photon_expected_bin = prob_rate_bin * self.N
+                    tor_bin = 3*np.sqrt(n_photon_expected_bin * (1 - prob_rate_bin))
+
+                    self.assertLess(abs(n_photon_bin-n_photon_expected_bin), tor_bin, f'n_photon_bin={n_photon_bin}, n_photon_expected_bin={n_photon_expected_bin}')
+
 
 
 class TestPairNumber(unittest.TestCase):
