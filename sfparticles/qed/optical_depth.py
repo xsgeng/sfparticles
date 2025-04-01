@@ -1,10 +1,15 @@
+from numba import boolean, float64, int64, njit, prange, void
+from numpy import log, random
+
+from .optical_depth_tables import (
+    _log_chi_range,
+    integ_pair_prob_rate_from_table,
+    integ_photon_prob_rate_from_table,
+    pair_delta_from_chi_delta_table,
+    photon_delta_from_chi_delta_table,
+)
+
 print("Using optical depth method.")
-from numba import njit, prange, void, float64, boolean, int64
-from numpy import log, random 
-from .optical_depth_tables import \
-    integ_photon_prob_rate_from_table, integ_pair_prob_rate_from_table, \
-    photon_delta_from_chi_delta_table, pair_delta_from_chi_delta_table, \
-    _log_chi_range
 
 _chi_min = 10.0**_log_chi_range[0]
 @njit(
