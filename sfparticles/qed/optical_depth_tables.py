@@ -66,15 +66,15 @@ def _bisect_interp(chi, table2d):
     chi_high = 10**(_log_chi_range[0] + chi_idx_high * _log_chi_delta)
     
     k = (table2d[chi_idx_high,  0] - table2d[chi_idx_low,  0]) / (chi_high - chi_low)
-    ymin = table2d[chi_idx_low,  0] + k * (chi - chi_low)
+    cdf_min = table2d[chi_idx_low,  0] + k * (chi - chi_low)
 
     k = (table2d[chi_idx_high, -1] - table2d[chi_idx_low, -1]) / (chi_high - chi_low)
-    ymax = table2d[chi_idx_low, -1] + k * (chi - chi_low)
+    cdf_max = table2d[chi_idx_low, -1] + k * (chi - chi_low)
 
-    r = np.random.rand() * ymax
-    # linear interp for r < ymin
-    if r < ymin:
-        return r/ymin * _delta_range[0]
+    r = np.random.rand() * cdf_max
+    # linear interp for r < cdf_min
+    if r < cdf_min:
+        return r/cdf_min * _delta_range[0]
     
     # bisect search
     while low <= high:
@@ -90,16 +90,16 @@ def _bisect_interp(chi, table2d):
     delta_idx = high # high = low - 1, the left index
 
     k = (table2d[chi_idx_high, delta_idx] - table2d[chi_idx_low, delta_idx]) / (chi_high - chi_low)
-    y1 = table2d[chi_idx_low, delta_idx] + k * (chi - chi_low)
+    cdf1 = table2d[chi_idx_low, delta_idx] + k * (chi - chi_low)
 
     k = (table2d[chi_idx_high, delta_idx+1] - table2d[chi_idx_low, delta_idx+1]) / (chi_high - chi_low)
-    y2 = table2d[chi_idx_low, delta_idx+1] + k * (chi - chi_low)
+    cdf2 = table2d[chi_idx_low, delta_idx+1] + k * (chi - chi_low)
 
     delta_left  = 1 / (1 + np.exp(-_A * (-1 + 2/(_delta_N-1)* delta_idx   )))
     delta_right = 1 / (1 + np.exp(-_A * (-1 + 2/(_delta_N-1)*(delta_idx+1))))
-    k = (delta_right - delta_left) / (y2 - y1)
+    k = (delta_right - delta_left) / (cdf2 - cdf1)
 
-    return delta_left + k * (r - y1)
+    return delta_left + k * (r - cdf1)
     
 
 @njit
