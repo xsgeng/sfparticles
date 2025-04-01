@@ -39,13 +39,13 @@ def _get_chi_idx(chi):
     if log_chi > _log_chi_range[1]:
         idx = _chi_N - 1
     if _log_chi_range[0] <= log_chi <= _log_chi_range[1]:
-        idx = math.floor((log_chi - _log_chi_range[0]) / _log_chi_delta)
+        idx = (log_chi - _log_chi_range[0]) / _log_chi_delta
 
     return idx
 
 @njit
 def _linear_interp1d(chi, table1d):
-    idx = _get_chi_idx(chi)
+    idx = math.floor(_get_chi_idx(chi))
     if idx == -1:
         return 0.0
     log_chi_left = _log_chi_range[0] + idx*_log_chi_delta
@@ -60,9 +60,17 @@ def _linear_interp1d(chi, table1d):
 def _bisect_interp(chi, table2d):
     low, high = 0, _delta_N-1
     chi_idx = _get_chi_idx(chi)
+    chi_idx_low = math.floor(chi_idx)
+    chi_idx_high = chi_idx_low + 1
+
+    chi_low = 10**(_log_chi_range[0] + chi_idx_low * _log_chi_delta)
+    chi_high = 10**(_log_chi_range[0] + chi_idx_high * _log_chi_delta)
     
-    ymin = (table2d[chi_idx, 0] + table2d[chi_idx+1, 0])*0.5
-    ymax = (table2d[chi_idx, -1] + table2d[chi_idx+1, -1])*0.5
+    k = (table2d[chi_idx_high,  0] - table2d[chi_idx_low,  0]) / (chi_high - chi_low)
+    ymin = table2d[chi_idx_low,  0] + k * (chi - chi_low)
+
+    k = (table2d[chi_idx_high, -1] - table2d[chi_idx_low, -1]) / (chi_high - chi_low)
+    ymax = table2d[chi_idx_low, -1] + k * (chi - chi_low)
 
     # lower than ymin are ignored
     r = np.random.rand() * (ymax-ymin) + ymin
@@ -78,8 +86,12 @@ def _bisect_interp(chi, table2d):
     # interp
     delta_idx = high # high = low - 1, the left index
 
-    y1 = (table2d[chi_idx,delta_idx  ] + table2d[chi_idx+1,delta_idx  ])*0.5
-    y2 = (table2d[chi_idx,delta_idx+1] + table2d[chi_idx+1,delta_idx+1])*0.5
+    k = (table2d[chi_idx_high, delta_idx] - table2d[chi_idx_low, delta_idx]) / (chi_high - chi_low)
+    y1 = table2d[chi_idx_low, delta_idx] + k * (chi - chi_low)
+
+    k = (table2d[chi_idx_high, delta_idx+1] - table2d[chi_idx_low, delta_idx+1]) / (chi_high - chi_low)
+    y2 = table2d[chi_idx_low, delta_idx+1] + k * (chi - chi_low)
+    
     k = _log_delta_delta / (y2 - y1)
     log_delta_left = _log_delta_range[0] + delta_idx*_log_delta_delta
     log_delta = log_delta_left + k * (r - y1)   
