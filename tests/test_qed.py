@@ -96,10 +96,10 @@ class TestPhotonNumber(unittest.TestCase):
                 self.assertLess(abs(n_photon-n_photon_expected), tor, f'n_photon={n_photon}, n_photon_expected={n_photon_expected}')
             
             for delta in [0.01, 0.1]:
-                with self.subTest(chi_e=chi_e, bin=[delta, delta+0.01]):
-                    n_photon_bin = np.histogram(pho.ux/self.gamma, bins=[delta, delta+0.01])[0]
+                with self.subTest(chi_e=chi_e, bin=[delta, delta*1.1]):
+                    n_photon_bin = np.histogram(pho.ux/self.gamma, bins=[delta, delta*1.1])[0]
                     prob_rate = gen_photon_prob_rate_for_delta(chi_e)
-                    prob_rate_bin = (prob_rate(delta) + prob_rate(delta+0.01))*0.01/2 * tau
+                    prob_rate_bin = (prob_rate(delta) + prob_rate(delta*1.1))*(delta*0.1)/2 * tau
 
                     n_photon_expected_bin = prob_rate_bin * self.N
                     tor_bin = 3*np.sqrt(n_photon_expected_bin * (1 - prob_rate_bin))
