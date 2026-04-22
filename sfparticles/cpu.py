@@ -89,15 +89,17 @@ def photon_recoil(ux, uy, uz, inv_gamma, event, photon_delta, N, to_be_pruned):
 
 @njit(
     void(
-        *[float64[:]]*12, 
-        float64[:], boolean[:], 
+        *[float64[:]]*15, 
+        boolean[:], 
         int64[:], float64[:], int64, int64,
     ), 
     parallel=True, cache=False
 )
 def create_photon(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,
+    t_offset_src,
     x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+    t_offset_dst,
     inv_gamma_dst, photon_to_be_pruned,
     event_index, photon_delta, N_buffered, N_photon,
 ):
@@ -107,6 +109,7 @@ def create_photon(
         x_dst[idx_dst] = x_src[idx_src]
         y_dst[idx_dst] = y_src[idx_src]
         z_dst[idx_dst] = z_src[idx_src]
+        t_offset_dst[idx_dst] = t_offset_src[idx_src]
         
         ux_dst[idx_dst] = photon_delta[idx_src] * ux_src[idx_src]
         uy_dst[idx_dst] = photon_delta[idx_src] * uy_src[idx_src]
@@ -119,10 +122,10 @@ def create_photon(
 
 @njit(
     void(
-        *[float64[:]]*6, 
+        *[float64[:]]*7, 
         boolean[:], 
-        *[float64[:]]*6, 
-        float64[:], boolean[:], 
+        *[float64[:]]*8, 
+        boolean[:], 
         int64[:], float64[:], int64, int64,
         boolean,
     ), 
@@ -130,8 +133,10 @@ def create_photon(
 )
 def create_pair(
     x_src, y_src, z_src, ux_src, uy_src, uz_src,
+    t_offset_src,
     photon_to_be_pruned,
     x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+    t_offset_dst,
     inv_gamma_dst, pair_to_be_pruned,
     event_index, pair_delta, N_buffered, N_pair,
     inverse_delta,
@@ -172,6 +177,7 @@ def create_pair(
         x_dst[idx_dst] = x_src[idx_src]
         y_dst[idx_dst] = y_src[idx_src]
         z_dst[idx_dst] = z_src[idx_src]
+        t_offset_dst[idx_dst] = t_offset_src[idx_src]
         
         delta = pair_delta[idx_src]
         if inverse_delta: 

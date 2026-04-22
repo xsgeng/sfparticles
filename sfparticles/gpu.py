@@ -140,7 +140,9 @@ if _use_gpu:
     @cuda.jit
     def create_photon_kernal(
         x_src, y_src, z_src, ux_src, uy_src, uz_src,
+        t_offset_src,
         x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+        t_offset_dst,
         inv_gamma_dst, photon_to_be_pruned,
         event_index, photon_delta, N_buffered, N_photon,
     ):
@@ -151,6 +153,7 @@ if _use_gpu:
             x_dst[idx_dst] = x_src[idx_src]
             y_dst[idx_dst] = y_src[idx_src]
             z_dst[idx_dst] = z_src[idx_src]
+            t_offset_dst[idx_dst] = t_offset_src[idx_src]
             
             ux_dst[idx_dst] = photon_delta[idx_src] * ux_src[idx_src]
             uy_dst[idx_dst] = photon_delta[idx_src] * uy_src[idx_src]
@@ -161,14 +164,18 @@ if _use_gpu:
             photon_to_be_pruned[idx_dst] = False
     def create_photon(
         x_src, y_src, z_src, ux_src, uy_src, uz_src,
+        t_offset_src,
         x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+        t_offset_dst,
         inv_gamma_dst, photon_to_be_pruned,
         event_index, photon_delta, N_buffered, N_photon,
     ):
         bpg = int(N_photon/tpb) + 1
         create_photon_kernal[bpg, tpb](
             x_src, y_src, z_src, ux_src, uy_src, uz_src,
+            t_offset_src,
             x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+            t_offset_dst,
             inv_gamma_dst, photon_to_be_pruned,
             event_index, photon_delta, N_buffered, N_photon,
         )
@@ -176,8 +183,10 @@ if _use_gpu:
     @cuda.jit
     def create_pair_kernal(
         x_src, y_src, z_src, ux_src, uy_src, uz_src,
+        t_offset_src,
         photon_to_be_pruned,
         x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+        t_offset_dst,
         inv_gamma_dst, pair_to_be_pruned,
         event_index, pair_delta, N_buffered, N_pair,
         inverse_delta,
@@ -189,6 +198,7 @@ if _use_gpu:
             x_dst[idx_dst] = x_src[idx_src]
             y_dst[idx_dst] = y_src[idx_src]
             z_dst[idx_dst] = z_src[idx_src]
+            t_offset_dst[idx_dst] = t_offset_src[idx_src]
             
             delta = pair_delta[idx_src]
             if inverse_delta: 
@@ -207,8 +217,10 @@ if _use_gpu:
             photon_to_be_pruned[idx_src] = True
     def create_pair(
         x_src, y_src, z_src, ux_src, uy_src, uz_src,
+        t_offset_src,
         photon_to_be_pruned,
         x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+        t_offset_dst,
         inv_gamma_dst, pair_to_be_pruned,
         event_index, pair_delta, N_buffered, N_pair,
         inverse_delta,
@@ -216,8 +228,10 @@ if _use_gpu:
         bpg = int(N_pair/tpb) + 1
         create_pair_kernal[bpg, tpb](
             x_src, y_src, z_src, ux_src, uy_src, uz_src,
+            t_offset_src,
             photon_to_be_pruned,
             x_dst, y_dst, z_dst, ux_dst, uy_dst, uz_dst,
+            t_offset_dst,
             inv_gamma_dst, pair_to_be_pruned,
             event_index, pair_delta, N_buffered, N_pair,
             inverse_delta,
