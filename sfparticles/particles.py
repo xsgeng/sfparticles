@@ -101,14 +101,17 @@ class Particles(object):
             self.ux = np.zeros(N)
             self.uy = np.zeros(N)
             self.uz = np.zeros(N)
-                
+            self.t_offset = np.zeros(N)
 
         if props:
-            assert len(props) == 6, 'given properties must has length of 6'
+            assert len(props) in (6, 7), 'given properties must has length of 6 or 7'
 
-            props_ = prepare_props(props, N)
+            props_ = prepare_props(props[:6], N)
 
             self.x, self.y, self.z, self.ux, self.uy, self.uz = props_
+
+            if len(props) == 7:
+                self.t_offset = prepare_props((props[6],), N)[0]
 
         # position, momentum and spin vectors
         self.attrs += ['x', 'y', 'z', 'ux', 'uy', 'uz']
@@ -136,6 +139,10 @@ class Particles(object):
         self.Bx = np.zeros(N)
         self.By = np.zeros(N)
         self.attrs += ['Ex', 'Ey', 'Ez', 'Bx', 'By', 'Bz']
+
+        if not hasattr(self, 't_offset'):
+            self.t_offset = np.zeros(N)
+        self.attrs += ['t_offset']
 
         # buffer
         self.N_buffered = N
@@ -311,14 +318,14 @@ class Particles(object):
             from .gpu import tpb
             bpg = int(self.N_buffered / tpb) + 1
             fields.field_func[bpg, tpb](
-                self.x, self.y, self.z, t, self.N_buffered, self._to_be_pruned,
-                self.Ex, self.Ey, self.Ez, 
+                self.x, self.y, self.z, t, self.t_offset, self.N_buffered, self._to_be_pruned,
+                self.Ex, self.Ey, self.Ez,
                 self.Bx, self.By, self.Bz
             )
         else:
             fields.field_func(
-                self.x, self.y, self.z, t, self.N_buffered, self._to_be_pruned,
-                self.Ex, self.Ey, self.Ez, 
+                self.x, self.y, self.z, t, self.t_offset, self.N_buffered, self._to_be_pruned,
+                self.Ex, self.Ey, self.Ez,
                 self.Bx, self.By, self.Bz
             )
 
@@ -419,7 +426,9 @@ class Particles(object):
             
             create_photon(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
+                self.t_offset,
                 pho.x, pho.y, pho.z, pho.ux, pho.uy, pho.uz,
+                pho.t_offset,
                 pho.inv_gamma, pho._to_be_pruned,
                 event_index, self.photon_delta, pho.N_buffered, N_photon,
             )
@@ -454,16 +463,20 @@ class Particles(object):
             pos._extend(N_pair)
             create_pair(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
+                self.t_offset,
                 self._to_be_pruned,
                 ele.x, ele.y, ele.z, ele.ux, ele.uy, ele.uz,
+                ele.t_offset,
                 ele.inv_gamma, ele._to_be_pruned,
                 event_index, self.pair_delta, ele.N_buffered, N_pair,
                 inverse_delta=False,
             )
             create_pair(
                 self.x, self.y, self.z, self.ux, self.uy, self.uz,
+                self.t_offset,
                 self._to_be_pruned,
                 pos.x, pos.y, pos.z, pos.ux, pos.uy, pos.uz,
+                pos.t_offset,
                 pos.inv_gamma, pos._to_be_pruned,
                 event_index, self.pair_delta, pos.N_buffered, N_pair,
                 inverse_delta=True,
@@ -562,9 +575,12 @@ class SpinParticles(Particles):
             self.sy = np.zeros(N)
             self.sz = np.zeros(N)
         if props:
-            assert len(props) == 9, 'given properties must has length of 9'
-            super().__init__(name, q, m, N, props[:6], RR, ae, push)
-            props_ = prepare_props(props[6:])
+            assert len(props) in (9, 10), 'given properties must has length of 9 or 10'
+            if len(props) == 9:
+                super().__init__(name, q, m, N, props[:6], RR, push)
+            else:
+                super().__init__(name, q, m, N, props[:6] + (props[9],), RR, push)
+            props_ = prepare_props(props[6:9], N)
 
             self.sx, self.sy, self.sz = props_
 
