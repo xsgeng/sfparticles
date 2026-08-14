@@ -1,6 +1,12 @@
 **/__pycache__/*
-**/*.egg-info/*
+**/*.egg-info/
 build/
+dist/
 *.ipynb
 *.png
 .aider*
+.claude/
+opencode.json
+uv.lock
+.venv/
+.vscode/
